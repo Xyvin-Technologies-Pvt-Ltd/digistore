@@ -19,6 +19,40 @@ class PublicUserModel {
   }
 }
 
+class RedemptionPaymentInfo {
+  final String? mode;
+  final int? pointsUsed;
+  final double? cashAmountDue;
+  final int? offerPointsCost;
+
+  const RedemptionPaymentInfo({
+    this.mode,
+    this.pointsUsed,
+    this.cashAmountDue,
+    this.offerPointsCost,
+  });
+
+  factory RedemptionPaymentInfo.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return const RedemptionPaymentInfo();
+    return RedemptionPaymentInfo(
+      mode: (json['mode'] ?? json['paymentMode']) as String?,
+      pointsUsed: (json['pointsUsed'] as num?)?.toInt(),
+      cashAmountDue: (json['cashAmountDue'] as num?)?.toDouble() ??
+          (json['cashDue'] as num?)?.toDouble() ??
+          (json['cashAmount'] as num?)?.toDouble(),
+      offerPointsCost: (json['offerPointsCost'] as num?)?.toInt() ??
+          (json['pointsCost'] as num?)?.toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'mode': mode,
+    'pointsUsed': pointsUsed,
+    'cashAmountDue': cashAmountDue,
+    'offerPointsCost': offerPointsCost,
+  };
+}
+
 class RedemptionModel {
   final String? id;
   final PublicUserModel? publicUserId;
@@ -36,8 +70,13 @@ class RedemptionModel {
   final DateTime? redeemedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-
   final bool? hasReview;
+  final int? pointsUsed;
+  final double? cashAmount;
+  final int? pointsTransferredToMerchant;
+  final String? paymentMode;
+  final String? billNo;
+  final RedemptionPaymentInfo? payment;
 
   const RedemptionModel({
     this.id,
@@ -57,6 +96,12 @@ class RedemptionModel {
     this.createdAt,
     this.updatedAt,
     this.hasReview,
+    this.pointsUsed,
+    this.cashAmount,
+    this.pointsTransferredToMerchant,
+    this.paymentMode,
+    this.billNo,
+    this.payment,
   });
 
   factory RedemptionModel.fromJson(Map<String, dynamic> json) {
@@ -90,6 +135,27 @@ class RedemptionModel {
           ? DateTime.tryParse(json['updatedAt'])?.toLocal()
           : null,
       hasReview: json['hasReview'] as bool?,
+      pointsUsed: (json['pointsUsed'] as num?)?.toInt() ??
+          (json['pointsUsedByCustomer'] as num?)?.toInt() ??
+          (json['payment'] is Map
+              ? (json['payment']['pointsUsed'] as num?)?.toInt()
+              : null),
+      cashAmount: (json['cashAmount'] as num?)?.toDouble() ??
+          (json['cashDue'] as num?)?.toDouble() ??
+          (json['cashPaidAtCounter'] as num?)?.toDouble() ??
+          (json['payment'] is Map
+              ? (json['payment']['cashAmountDue'] as num?)?.toDouble()
+              : null),
+      pointsTransferredToMerchant:
+          (json['pointsTransferredToMerchant'] as num?)?.toInt() ??
+              (json['pointsTransferredToMerchantPool'] as num?)?.toInt(),
+      paymentMode: (json['paymentMode'] as String?) ??
+          (json['payment'] is Map ? json['payment']['mode'] as String? : null),
+      billNo: json['billNo'] as String?,
+      payment: SafeParser.parseObject(
+        json['payment'],
+        RedemptionPaymentInfo.fromJson,
+      ),
     );
   }
 }

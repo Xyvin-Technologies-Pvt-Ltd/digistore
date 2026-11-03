@@ -9,6 +9,7 @@ import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/providers/user_provider.dart';
 import '../../../data/providers/auth_provider.dart';
 import '../../../data/utils/global_variables.dart';
+import '../../../data/models/user_model.dart';
 import '../../components/confirmation_dialog.dart';
 import '../history.dart';
 import '../services/my_bookings_page.dart';
@@ -383,7 +384,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                 ],
               ).fadeIn(),
 
-              SizedBox(height: screenSize.responsivePadding(24)),
+              SizedBox(height: screenSize.responsivePadding(20)),
+
+              // Loyalty Points & Membership Tier Card
+              if (!GlobalVariables.isGuest) ...[
+                _buildLoyaltyTierCard(context, screenSize, user),
+                SizedBox(height: screenSize.responsivePadding(20)),
+              ],
 
               if (!GlobalVariables.isGuest)
                 _menuCard(
@@ -452,7 +459,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                         scale: animation,
                         child: SizeTransition(
                           sizeFactor: animation,
-                          axisAlignment: -1,
+                          alignment: Alignment.topCenter,
                           child: child,
                         ),
                       ),
@@ -513,7 +520,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                                 Switch.adaptive(
                                   value: _isNotificationsEnabled,
                                   onChanged: _toggleNotifications,
-                                  activeColor: kRewardCtaPurple,
+                                  activeThumbColor: kRewardCtaPurple,
                                   activeTrackColor: kRewardCtaPurple.withValues(
                                     alpha: 0.3,
                                   ),
@@ -682,4 +689,177 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       ),
     );
   }
+
+  Widget _buildLoyaltyTierCard(
+    BuildContext context,
+    ScreenSizeData screenSize,
+    UserModel? user,
+  ) {
+    final int pointsBalance = user?.pointsBalance ?? 0;
+    final int totalEarned = user?.totalPointsEarned ?? 0;
+    final String currentTier = user?.currentTier?.name ?? 'Bronze';
+    final String? nextTier = user?.nextTier?.name;
+    final int pointsNeeded = user?.nextTier?.pointsNeeded ?? 0;
+    final double progress = (user?.progressToNextTier ?? 0).clamp(0, 100);
+    final double? commissionShare = user?.currentTier?.customerCommissionShare;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6155F5), Color(0xFF4F46E5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6155F5).withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'LOYALTY POINTS BALANCE',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFE0E7FF),
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.stars_rounded,
+                        color: Color(0xFFFDE047),
+                        size: 26,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$pointsBalance pts',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Total earned: $totalEarned pts',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: Color(0xFFC7D2FE),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.military_tech_rounded,
+                          color: Color(0xFFFDE047),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$currentTier Tier',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (commissionShare != null && commissionShare > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${commissionShare.toInt()}% Commission Share',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 9,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFFFDE047),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress / 100,
+              minHeight: 7,
+              backgroundColor: Colors.white.withValues(alpha: 0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFFFDE047),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${progress.toInt()}% towards ${nextTier ?? "Next Tier"}',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFFE0E7FF),
+                ),
+              ),
+              if (pointsNeeded > 0 && nextTier != null)
+                Text(
+                  '$pointsNeeded pts to $nextTier',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFDE047),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
 }

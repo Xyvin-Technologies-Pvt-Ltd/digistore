@@ -27,6 +27,7 @@ class _RedemptionOtpPageState extends ConsumerState<RedemptionOtpPage> {
   bool isLoading = false;
 
   Future<void> _verify() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -71,12 +72,13 @@ class _RedemptionOtpPageState extends ConsumerState<RedemptionOtpPage> {
             billNo: _billNoController.text.trim().isEmpty
                 ? null
                 : _billNoController.text.trim(),
+            pointsToUse: (widget.args?['pointsToUse'] as num?)?.toInt(),
           );
 
       if (response.success && mounted) {
         ToastService().showToast(context, 'Redemption successful!');
         Navigator.of(context).pushReplacementNamed(
-          'partnerRedemptionSuccess',
+          'redemptionVerified',
           arguments: {
             'redemption': response.data!['data'],
             'offer': widget.args,
@@ -104,8 +106,11 @@ class _RedemptionOtpPageState extends ConsumerState<RedemptionOtpPage> {
   @override
   Widget build(BuildContext context) {
     final screenSize = ref.watch(screenSizeProvider);
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -328,6 +333,13 @@ class _RedemptionOtpPageState extends ConsumerState<RedemptionOtpPage> {
                             ),
                             onChanged: (value) {
                               otp = value;
+                              if (value.length == 6) {
+                                FocusManager.instance.primaryFocus?.unfocus();
+                              }
+                            },
+                            onCompleted: (value) {
+                              otp = value;
+                              FocusManager.instance.primaryFocus?.unfocus();
                             },
                           ),
                         ),
@@ -350,6 +362,7 @@ class _RedemptionOtpPageState extends ConsumerState<RedemptionOtpPage> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

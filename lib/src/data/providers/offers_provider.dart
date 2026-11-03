@@ -404,6 +404,7 @@ class Offers extends _$Offers {
     required String otp,
     double? saleAmount,
     String? billNo,
+    int? pointsToUse,
   }) async {
     try {
       final api = ref.read(publicApiProvider);
@@ -413,6 +414,9 @@ class Offers extends _$Offers {
       }
       if (billNo != null) {
         payload['billNo'] = billNo;
+      }
+      if (pointsToUse != null) {
+        payload['pointsToUse'] = pointsToUse;
       }
 
       final response = await api.post(
@@ -428,13 +432,16 @@ class Offers extends _$Offers {
   }
 
   Future<ApiResponse<Map<String, dynamic>>> customerInitiateRedemption(
-    String offerId,
-  ) async {
+    String offerId, {
+    int? pointsToUse,
+  }) async {
     try {
       final api = ref.read(publicApiProvider);
-      final response = await api.post('/offers/$offerId/redeem', {
-        'offerId': offerId,
-      });
+      final Map<String, dynamic> payload = {'offerId': offerId};
+      if (pointsToUse != null) {
+        payload['pointsToUse'] = pointsToUse;
+      }
+      final response = await api.post('/offers/$offerId/redeem', payload);
       return response;
     } catch (e, stack) {
       log('Error initiating customer redemption: $e', stackTrace: stack);
@@ -461,12 +468,16 @@ class Offers extends _$Offers {
     required String redemptionId,
     required String qrToken,
     double? saleAmount,
+    int? pointsToUse,
   }) async {
     try {
       final api = ref.read(publicApiProvider);
       final payload = <String, dynamic>{'qrToken': qrToken};
       if (saleAmount != null) {
         payload['saleAmount'] = saleAmount;
+      }
+      if (pointsToUse != null) {
+        payload['pointsToUse'] = pointsToUse;
       }
       final response = await api.post(
         '/offers/redemptions/$redemptionId/scan-qr',
@@ -483,12 +494,16 @@ class Offers extends _$Offers {
     required String redemptionId,
     required String otp,
     double? saleAmount,
+    int? pointsToUse,
   }) async {
     try {
       final api = ref.read(publicApiProvider);
       final Map<String, dynamic> payload = {'otp': otp};
       if (saleAmount != null) {
         payload['saleAmount'] = saleAmount;
+      }
+      if (pointsToUse != null) {
+        payload['pointsToUse'] = pointsToUse;
       }
       final response = await api.post(
         '/offers/redemptions/$redemptionId/verify',

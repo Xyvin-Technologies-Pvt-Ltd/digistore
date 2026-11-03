@@ -173,7 +173,8 @@ Route<dynamic> generateRoute(RouteSettings? settings) {
       break;
 
     case 'redemptionVerified':
-      page = const RedemptionVerifiedPage();
+      final args = settings?.arguments as Map<String, dynamic>?;
+      page = RedemptionVerifiedPage(args: args);
       transitionToUse = TransitionType.slideFromRight;
       transitionDuration = const Duration(milliseconds: 300);
       break;

@@ -50,6 +50,8 @@ class OfferModel {
   /// Single authoritative active promotion from API (`getOfferActiveDeal`).
   final ActiveDealModel? activeDeal;
   final double? distance;
+  final int? pointsCost;
+  final bool? requiresPointsPayment;
 
   const OfferModel({
     this.id,
@@ -93,6 +95,8 @@ class OfferModel {
     this.deals,
     this.activeDeal,
     this.distance,
+    this.pointsCost,
+    this.requiresPointsPayment,
   });
 
   factory OfferModel.fromJson(Map<String, dynamic> json) {
@@ -200,6 +204,8 @@ class OfferModel {
       distance: json['distance'] != null
           ? (json['distance'] as num).toDouble()
           : null,
+      pointsCost: (json['pointsCost'] as num?)?.toInt(),
+      requiresPointsPayment: json['requiresPointsPayment'] as bool?,
     );
   }
 
@@ -246,6 +252,8 @@ class OfferModel {
       'deals': deals?.toJson(),
       'activeDeal': activeDeal?.toJson(),
       'distance': distance,
+      'pointsCost': pointsCost,
+      'requiresPointsPayment': requiresPointsPayment,
     };
   }
 
@@ -290,6 +298,8 @@ class OfferModel {
     DealsModel? deals,
     ActiveDealModel? activeDeal,
     double? distance,
+    int? pointsCost,
+    bool? requiresPointsPayment,
   }) {
     return OfferModel(
       id: id ?? this.id,
@@ -332,6 +342,8 @@ class OfferModel {
       deals: deals ?? this.deals,
       activeDeal: activeDeal ?? this.activeDeal,
       distance: distance ?? this.distance,
+      pointsCost: pointsCost ?? this.pointsCost,
+      requiresPointsPayment: requiresPointsPayment ?? this.requiresPointsPayment,
     );
   }
 }

@@ -449,7 +449,13 @@ class _OfferDetailPageState extends ConsumerState<OfferDetailPage> {
         cachedOffer?.originalPrice ?? (widget.args['originalPrice'] as num?);
     final num? offerPrice =
         cachedOffer?.offerPrice ?? (widget.args['offerPrice'] as num?);
-    final num? pointsCost = widget.args['pointsCost'] as num?;
+    final num? pointsCost = cachedOffer?.pointsCost ?? (widget.args['pointsCost'] as num?);
+    final num totalCostNum = (pointsCost != null && pointsCost > 0)
+        ? pointsCost
+        : ((offerPrice != null && offerPrice > 0)
+            ? offerPrice
+            : (originalPrice ?? 0));
+    final int effectivePointsCost = totalCostNum.toInt();
     final num? distanceKm =
         cachedOffer?.distance ?? (widget.args['distance'] as num?);
     final bool isPremium =
@@ -1281,6 +1287,8 @@ class _OfferDetailPageState extends ConsumerState<OfferDetailPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+
+
                         // Separator Band
                         const SizedBox(
                           width: double.infinity,
@@ -1857,6 +1865,9 @@ class _OfferDetailPageState extends ConsumerState<OfferDetailPage> {
                           'subtitle': subtitle,
                           'imageUrl': imageUrl,
                           'id': widget.args['id'] ?? widget.args['_id'],
+                          'pointsCost': effectivePointsCost,
+                          'offerPrice': offerPrice,
+                          'originalPrice': originalPrice,
                         };
                         if (isPartner) {
                           Navigator.of(context).pushNamed(
@@ -1903,7 +1914,9 @@ class _OfferDetailPageState extends ConsumerState<OfferDetailPage> {
                         ),
                       )
                     : Text(
-                        isPartner ? 'Initiate Redemption' : 'Redeem Now',
+                        isPartner
+                        ? 'Initiate Redemption'
+                        : 'Redeem Offer',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 16,
@@ -2051,4 +2064,5 @@ class _OfferDetailPageState extends ConsumerState<OfferDetailPage> {
       ],
     );
   }
+
 }

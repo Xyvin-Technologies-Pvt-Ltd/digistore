@@ -83,7 +83,7 @@ class UserModel {
         PreferencesModel.fromJson,
       ),
       currentTier: SafeParser.parseObject(
-        json['currentTier'],
+        json['currentTier'] ?? json['tier'],
         TierModel.fromJson,
       ),
       nextTier: SafeParser.parseObject(
@@ -279,25 +279,35 @@ class TierModel {
   final int? minPoints;
   final double? bonusMultiplier;
   final List<String>? benefits;
+  final String? badge;
+  final double? customerCommissionShare;
+  final int? nextTierPoints;
 
   const TierModel({
     this.name,
     this.minPoints,
     this.bonusMultiplier,
     this.benefits,
+    this.badge,
+    this.customerCommissionShare,
+    this.nextTierPoints,
   });
 
   factory TierModel.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const TierModel();
     return TierModel(
       name: json['name'] as String?,
-      minPoints: json['minPoints'] as int?,
+      minPoints: (json['minPoints'] as num?)?.toInt(),
       bonusMultiplier: json['bonusMultiplier'] != null
           ? (json['bonusMultiplier'] as num).toDouble()
           : null,
       benefits: json['benefits'] != null
           ? List<String>.from(json['benefits'])
           : null,
+      badge: json['badge'] as String?,
+      customerCommissionShare:
+          (json['customerCommissionShare'] as num?)?.toDouble(),
+      nextTierPoints: (json['nextTierPoints'] as num?)?.toInt(),
     );
   }
 
@@ -307,6 +317,9 @@ class TierModel {
       'minPoints': minPoints,
       'bonusMultiplier': bonusMultiplier,
       'benefits': benefits,
+      'badge': badge,
+      'customerCommissionShare': customerCommissionShare,
+      'nextTierPoints': nextTierPoints,
     };
   }
 }

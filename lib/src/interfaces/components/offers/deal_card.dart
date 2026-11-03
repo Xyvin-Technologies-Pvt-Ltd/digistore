@@ -347,6 +347,40 @@ class DealCard extends ConsumerWidget {
                         ],
                       ),
                     ],
+                    if (rawOffer?.pointsCost != null &&
+                        rawOffer!.pointsCost! > 0) ...[
+                      SizedBox(height: screenSize.responsivePadding(6)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.stars_rounded,
+                              size: 11,
+                              color: Color(0xFFD97706),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${rawOffer!.pointsCost} pts',
+                              style: kSmallerTitleB.copyWith(
+                                color: const Color(0xFFB45309),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (distance != null) ...[
                       SizedBox(height: screenSize.responsivePadding(6)),
                       Text(

@@ -144,7 +144,7 @@ class ApiProvider {
       final uriWithParams = queryParams != null && queryParams.isNotEmpty
           ? uri.replace(queryParameters: queryParams)
           : uri;
-
+_safeLog('headers', headers.toString());
       final response = await _client.get(uriWithParams, headers: headers);
 
       _safeLog('API GET', '$baseUrl$endpoint');
