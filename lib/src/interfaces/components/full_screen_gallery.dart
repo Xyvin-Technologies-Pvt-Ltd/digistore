@@ -30,6 +30,11 @@ class FullScreenGallery extends ConsumerStatefulWidget {
 class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
   late PageController _pageController;
   late int _currentIndex;
+  int _pointerCount = 0;
+  bool _isZoomed = false;
+  final Map<int, TransformationController> _transformControllers = {};
+
+  bool get _pagingLocked => _pointerCount > 1 || _isZoomed;
 
   @override
   void initState() {
@@ -43,8 +48,38 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
 
   @override
   void dispose() {
+    for (final controller in _transformControllers.values) {
+      controller.dispose();
+    }
     _pageController.dispose();
     super.dispose();
+  }
+
+  TransformationController _controllerFor(int index) {
+    return _transformControllers.putIfAbsent(
+      index,
+      TransformationController.new,
+    );
+  }
+
+  void _resetZoomAt(int index) {
+    final controller = _transformControllers[index];
+    if (controller != null && controller.value != Matrix4.identity()) {
+      controller.value = Matrix4.identity();
+    }
+  }
+
+  void _handlePointerCountChange(int delta) {
+    final next = (_pointerCount + delta).clamp(0, 20);
+    if (next == _pointerCount) return;
+    setState(() => _pointerCount = next);
+  }
+
+  void _syncZoomState(int index) {
+    final scale = _controllerFor(index).value.getMaxScaleOnAxis();
+    final zoomed = scale > 1.01;
+    if (zoomed == _isZoomed) return;
+    setState(() => _isZoomed = zoomed);
   }
 
   Widget _thumbFor(BusinessMediaItem item) {
@@ -63,6 +98,37 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
     return AdvancedNetworkImage(imageUrl: item.url, fit: BoxFit.cover);
   }
 
+  Widget _buildZoomableImage(BusinessMediaItem item, int index) {
+    final controller = _controllerFor(index);
+
+    return Hero(
+      tag: 'gallery_image_${item.url}_$index',
+      child: Listener(
+        onPointerDown: (_) => _handlePointerCountChange(1),
+        onPointerUp: (_) {
+          _handlePointerCountChange(-1);
+          _syncZoomState(index);
+        },
+        onPointerCancel: (_) {
+          _handlePointerCountChange(-1);
+          _syncZoomState(index);
+        },
+        child: InteractiveViewer(
+          transformationController: controller,
+          minScale: 1.0,
+          maxScale: 4.0,
+          onInteractionEnd: (_) => _syncZoomState(index),
+          child: Center(
+            child: AdvancedNetworkImage(
+              imageUrl: item.url,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenSize = ref.watch(screenSizeProvider);
@@ -74,10 +140,17 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
         children: [
           PageView.builder(
             controller: _pageController,
-            physics: const BouncingScrollPhysics(),
+            physics: _pagingLocked
+                ? const NeverScrollableScrollPhysics()
+                : const BouncingScrollPhysics(),
             itemCount: items.length,
             onPageChanged: (index) {
-              setState(() => _currentIndex = index);
+              _resetZoomAt(_currentIndex);
+              setState(() {
+                _currentIndex = index;
+                _isZoomed = false;
+                _pointerCount = 0;
+              });
             },
             itemBuilder: (context, index) {
               final item = items[index];
@@ -96,19 +169,7 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                 );
               }
 
-              return InteractiveViewer(
-                minScale: 1.0,
-                maxScale: 4.0,
-                child: Hero(
-                  tag: 'gallery_image_${item.url}_$index',
-                  child: Center(
-                    child: AdvancedNetworkImage(
-                      imageUrl: item.url,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              );
+              return _buildZoomableImage(item, index);
             },
           ),
           Positioned(
