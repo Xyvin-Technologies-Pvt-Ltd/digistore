@@ -14,6 +14,7 @@ import '../../../data/services/secure_storage_service.dart';
 import '../../../data/providers/user_type_provider.dart';
 import '../../../data/providers/user_provider.dart';
 import '../../../data/providers/partner_provider.dart';
+import '../../components/referral_code_field.dart';
 
 class OtpVerificationPage extends ConsumerStatefulWidget {
   const OtpVerificationPage({super.key});
@@ -25,11 +26,15 @@ class OtpVerificationPage extends ConsumerStatefulWidget {
 
 class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
   final PinInputController _otpController = PinInputController();
+  final TextEditingController _referralController = TextEditingController();
+  final GlobalKey<ReferralCodeFieldState> _referralKey =
+      GlobalKey<ReferralCodeFieldState>();
   String otp = '';
   bool _termsAccepted = false;
   late Future<Map<String, dynamic>?> _registrationDataFuture;
   int _resendTimerSeconds = 90;
   Timer? _resendTimer;
+  bool _offerReferralCode = false;
 
   @override
   void initState() {
@@ -37,7 +42,17 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
     _registrationDataFuture = ref
         .read(secureStorageServiceProvider)
         .getRegistrationData();
+    _registrationDataFuture.then(_rememberAccountType);
     _startResendTimer();
+  }
+
+  void _rememberAccountType(Map<String, dynamic>? data) {
+    if (!mounted) return;
+    final customer = ref.read(userTypeProvider) == UserType.customer;
+    final existingAccount = data?['isNewUser'] == false;
+    setState(() {
+      _offerReferralCode = customer && !existingAccount;
+    });
   }
 
   void _startResendTimer() {
@@ -60,6 +75,7 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
   void dispose() {
     _resendTimer?.cancel();
     _otpController.dispose();
+    _referralController.dispose();
     super.dispose();
   }
 
@@ -203,6 +219,14 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                 },
               ),
 
+              if (_offerReferralCode) ...[
+                SizedBox(height: screenSize.responsivePadding(24)),
+                ReferralCodeField(
+                  key: _referralKey,
+                  controller: _referralController,
+                ),
+              ],
+
               SizedBox(height: screenSize.responsivePadding(24)),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,9 +304,33 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                       final phone = data?['phone'] ?? '';
 
                       if (phone.isNotEmpty) {
+                        String? referralCode;
+                        if (_offerReferralCode &&
+                            _referralController.text.trim().isNotEmpty) {
+                          final check = await _referralKey.currentState
+                              ?.resolve();
+                          if (!context.mounted) return;
+                          if (check == null || !check.valid || check.code == null) {
+                            ToastService().showToast(
+                              context,
+                              check?.message.isNotEmpty == true
+                                  ? check!.message
+                                  : 'Enter a valid referral code or leave it blank',
+                              type: ToastType.error,
+                            );
+                            return;
+                          }
+                          referralCode = check.code;
+                        }
+
                         final result = await ref
                             .read(authProvider.notifier)
-                            .verifyOtp(phone, otp, _termsAccepted);
+                            .verifyOtp(
+                              phone,
+                              otp,
+                              _termsAccepted,
+                              referralCode: referralCode,
+                            );
                         if (result['success'] == true && context.mounted) {
                           final userType = ref.read(userTypeProvider);
 
@@ -383,10 +431,11 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                 'OTP resent successfully',
                                 type: ToastType.success,
                               );
+                              final refreshed = storage.getRegistrationData();
                               setState(() {
-                                _registrationDataFuture = storage
-                                    .getRegistrationData();
+                                _registrationDataFuture = refreshed;
                               });
+                              refreshed.then(_rememberAccountType);
                               _startResendTimer();
                             } else if (!success && context.mounted) {
                               ToastService().showToast(

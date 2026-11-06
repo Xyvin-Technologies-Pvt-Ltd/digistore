@@ -154,8 +154,19 @@ _safeLog('headers', headers.toString());
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return ApiResponse.success(decoded, response.statusCode);
       } else {
-        final message = decoded['message'] ?? 'Failed to load data';
-        return ApiResponse.error(message, response.statusCode);
+        final message = decoded is Map
+            ? (decoded['message'] ?? 'Failed to load data')
+            : 'Failed to load data';
+        final errorBody = decoded is Map<String, dynamic>
+            ? decoded
+            : decoded is Map
+            ? Map<String, dynamic>.from(decoded)
+            : null;
+        return ApiResponse.error(
+          message.toString(),
+          response.statusCode,
+          errorBody,
+        );
       }
     } catch (e, stackTrace) {
       await CrashlyticsService.logError(e, stackTrace);
@@ -170,12 +181,16 @@ _safeLog('headers', headers.toString());
     String endpoint,
     Map<String, dynamic> data, {
     bool requireAuth = true,
+    Map<String, String>? headers,
   }) async {
     try {
-      final headers = await _buildHeaders(requireAuth: requireAuth);
+      final builtHeaders = await _buildHeaders(requireAuth: requireAuth);
+      if (headers != null) {
+        builtHeaders.addAll(headers);
+      }
       final response = await _client.post(
         Uri.parse('$baseUrl$endpoint'),
-        headers: headers,
+        headers: builtHeaders,
         body: json.encode(data),
       );
       _safeLog('API POST', '$baseUrl$endpoint');

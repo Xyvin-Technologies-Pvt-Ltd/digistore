@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +15,9 @@ import '../models/partner_model.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../utils/notification_permission_helper.dart';
 import '../services/notification_service/notification_service.dart';
+import '../utils/otp_account.dart';
+import '../utils/referral_code.dart';
+import 'referral_provider.dart';
 
 part 'auth_provider.g.dart';
 
@@ -60,6 +62,15 @@ class AuthNotifier extends Notifier<AsyncValue<void>> {
       final response = await api.post('/auth/send-otp', payload);
 
       if (response.success && response.data?['success'] == true) {
+        final storage = ref.read(secureStorageServiceProvider);
+        final saved = await storage.getRegistrationData() ?? <String, dynamic>{};
+        final isNewUser = isNewUserInOtpResponse(response.data);
+        if (isNewUser == null) {
+          saved.remove('isNewUser');
+        } else {
+          saved['isNewUser'] = isNewUser;
+        }
+        await storage.saveRegistrationData(saved);
         state = const AsyncData(null);
         return true;
       } else {
@@ -74,16 +85,23 @@ class AuthNotifier extends Notifier<AsyncValue<void>> {
   Future<Map<String, dynamic>> verifyOtp(
     String phone,
     String otp,
-    bool termsAccepted,
-  ) async {
+    bool termsAccepted, {
+    String? referralCode,
+  }) async {
     state = const AsyncLoading();
     try {
       final api = ref.read(apiProvider);
-      final response = await api.post('/auth/verify-otp', {
+      final payload = <String, dynamic>{
         'phone': phone,
         'otp': otp,
         'termsAccepted': termsAccepted,
-      });
+      };
+      final userType = ref.read(userTypeProvider);
+      final code = ReferralCode.normalize(referralCode);
+      if (userType == UserType.customer && code != null) {
+        payload['referralCode'] = code;
+      }
+      final response = await api.post('/auth/verify-otp', payload);
 
       if (response.success && response.data?['success'] == true) {
         final responseData = response.data!;
@@ -97,9 +115,11 @@ class AuthNotifier extends Notifier<AsyncValue<void>> {
         if (token != null) {
           await storage.saveBearerToken(token);
         }
+        if (code != null) {
+          await ref.read(pendingReferralProvider.notifier).clear();
+        }
 
         // Skip profile setup for partners by forcing onboardingComplete to true
-        final userType = ref.read(userTypeProvider);
         final effectiveOnboardingComplete = (userType == UserType.partner)
             ? true
             : onboardingComplete;

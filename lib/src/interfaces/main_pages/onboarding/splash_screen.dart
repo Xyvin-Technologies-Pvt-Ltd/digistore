@@ -13,6 +13,7 @@ import '../../../data/providers/user_type_provider.dart';
 import '../../../data/services/notification_service/notification_service.dart';
 import '../../../data/services/deep_link_service.dart';
 import '../../../data/providers/app_version_provider.dart';
+import '../../../data/providers/referral_provider.dart';
 import '../../components/update_maintenance_bottom_sheet.dart';
 import 'login_page.dart';
 
@@ -44,8 +45,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void initState() {
     super.initState();
 
-    // Initialize notification and deep link handling
+    // Initialize notification and deep link handling.
+    // Referral capture starts in parallel and must not hold the splash.
     ref.read(deepLinkServiceProvider).initialize();
+    ref.read(referralAttributionProvider).resolveDeferred();
     ref.read(notificationServiceProvider).initialize();
 
     _entranceController = AnimationController(

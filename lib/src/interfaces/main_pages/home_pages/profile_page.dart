@@ -408,6 +408,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                       },
                     ),
                     _buildMenuItem(
+                      'Refer & Earn',
+                      Icons.group_add_outlined,
+                      screenSize,
+                      onTap: () {
+                        Navigator.pushNamed(context, 'referEarn');
+                      },
+                    ),
+                    _buildMenuItem(
                       'My Claimed Vouchers',
                       Icons.card_giftcard_rounded,
                       screenSize,

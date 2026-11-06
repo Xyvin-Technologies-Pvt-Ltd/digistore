@@ -11,6 +11,8 @@ import 'package:setgo/src/data/providers/offers_provider.dart';
 import 'package:setgo/src/data/providers/shops_provider.dart';
 import 'package:setgo/src/data/providers/rewards_provider.dart';
 import 'package:setgo/src/data/utils/launch_url.dart';
+import 'package:setgo/src/data/utils/referral_code.dart';
+import 'package:setgo/src/data/providers/referral_provider.dart';
 
 final deepLinkServiceProvider = Provider<DeepLinkService>((ref) {
   return DeepLinkService(ref);
@@ -52,7 +54,12 @@ class DeepLinkService {
         debugPrint('🔗 Initial link path segments: ${appLink.pathSegments}');
         debugPrint('🔗 Initial link scheme: ${appLink.scheme}');
         debugPrint('🔗 Initial link host: ${appLink.host}');
-        // Don't handle immediately - let splash screen handle it
+        await _captureReferral(appLink);
+        // The code is already stored for signup. Don't let the navbar
+        // treat a referral-only link as a navigation after login.
+        if (ReferralCode.isAttributionLink(appLink)) {
+          _pendingDeepLink = null;
+        }
       } else {
         debugPrint('🔗 No initial deep link found');
       }
@@ -267,11 +274,13 @@ class DeepLinkService {
       debugPrint('🔗 Path segments: ${uri.pathSegments}');
       debugPrint('🔗 Query parameters: ${uri.queryParameters}');
 
+      final savedReferral = await _captureReferral(uri);
+      final referralOnly = ReferralCode.isAttributionLink(uri);
+
       // External http(s) URLs (notification open_url) — open in browser.
       final isHttp = uri.scheme == 'http' || uri.scheme == 'https';
-      final isAppHttpsLink =
-          uri.host == 'setgo.in' && uri.path.contains('/app');
-      if (isHttp && !isAppHttpsLink) {
+      final isAppHttpsLink = _isAppHost(uri) && uri.path.contains('/app');
+      if (isHttp && !isAppHttpsLink && !referralOnly) {
         await launchURL(uri.toString());
         return;
       }
@@ -293,6 +302,11 @@ class DeepLinkService {
       final savedToken = await secureStorage.getBearerToken();
 
       if (savedToken == null || savedToken.isEmpty) {
+        if (referralOnly) {
+          // Code is already stored. Leave login / OTP on screen so the
+          // field can pick it up instead of restarting the auth flow.
+          return;
+        }
         debugPrint(
           'Authentication required for deep link. Redirecting to login.',
         );
@@ -307,6 +321,16 @@ class DeepLinkService {
           'login',
           (route) => false,
         );
+        return;
+      }
+
+      if (referralOnly) {
+        if (savedReferral) {
+          final code = ReferralCode.fromUri(uri);
+          if (code != null) {
+            _showInfo('Referral code $code saved');
+          }
+        }
         return;
       }
 
@@ -497,6 +521,35 @@ class DeepLinkService {
         message,
         type: SnackbarType.error,
       );
+    }
+  }
+
+  void _showInfo(String message) {
+    final context = NavigationService.navigatorKey.currentContext;
+    if (context == null) return;
+    SnackbarService().showSnackBar(
+      context,
+      message,
+      type: SnackbarType.info,
+    );
+  }
+
+  bool _isAppHost(Uri uri) {
+    final host = uri.host.toLowerCase();
+    return host == 'setgo.in' ||
+        host == 'www.setgo.in' ||
+        host == 'setgoinnovations.com' ||
+        host == 'www.setgoinnovations.com';
+  }
+
+  Future<bool> _captureReferral(Uri uri) async {
+    try {
+      final code = ReferralCode.fromUri(uri);
+      if (code == null) return false;
+      return await _ref.read(referralAttributionProvider).rememberExplicit(code);
+    } catch (e) {
+      debugPrint('Referral capture failed: $e');
+      return false;
     }
   }
 

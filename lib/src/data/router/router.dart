@@ -13,6 +13,7 @@ import '../../interfaces/main_pages/offer_pages/redemption_instructions_page.dar
 import '../../interfaces/main_pages/offer_pages/redemption_verified_page.dart';
 import '../../interfaces/main_pages/offer_pages/scratch_card_page.dart';
 import '../../interfaces/main_pages/home_pages/my_account_page.dart';
+import '../../interfaces/main_pages/home_pages/refer_earn_page.dart';
 import '../../interfaces/main_pages/home_pages/claimed_rewards_page.dart';
 import '../../interfaces/main_pages/home_pages/help_support_page.dart';
 import '../../interfaces/main_pages/support_pages/support_tickets_page.dart';
@@ -229,6 +230,12 @@ Route<dynamic> generateRoute(RouteSettings? settings) {
       final args = settings?.arguments as Map<String, dynamic>? ?? {};
       final isEditMode = args['isEditMode'] as bool? ?? false;
       page = MyAccountPage(isEditMode: isEditMode);
+      transitionToUse = TransitionType.slideFromRight;
+      transitionDuration = const Duration(milliseconds: 300);
+      break;
+
+    case 'referEarn':
+      page = const ReferEarnPage();
       transitionToUse = TransitionType.slideFromRight;
       transitionDuration = const Duration(milliseconds: 300);
       break;
