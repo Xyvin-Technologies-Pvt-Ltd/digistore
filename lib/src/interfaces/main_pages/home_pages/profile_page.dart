@@ -416,7 +416,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                       },
                     ),
                     _buildMenuItem(
-                      'My Claimed Vouchers',
+                      'My Vouchers',
+                      Icons.local_offer_outlined,
+                      screenSize,
+                      onTap: () {
+                        Navigator.pushNamed(context, 'myVouchers');
+                      },
+                    ),
+                    _buildMenuItem(
+                      'My Claimed Rewards',
                       Icons.card_giftcard_rounded,
                       screenSize,
                       onTap: () {

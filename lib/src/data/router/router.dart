@@ -15,6 +15,7 @@ import '../../interfaces/main_pages/offer_pages/scratch_card_page.dart';
 import '../../interfaces/main_pages/home_pages/my_account_page.dart';
 import '../../interfaces/main_pages/home_pages/refer_earn_page.dart';
 import '../../interfaces/main_pages/home_pages/claimed_rewards_page.dart';
+import '../../interfaces/main_pages/home_pages/my_vouchers_page.dart';
 import '../../interfaces/main_pages/home_pages/help_support_page.dart';
 import '../../interfaces/main_pages/support_pages/support_tickets_page.dart';
 import '../../interfaces/main_pages/support_pages/support_ticket_detail_page.dart';
@@ -250,6 +251,12 @@ Route<dynamic> generateRoute(RouteSettings? settings) {
 
     case 'claimedRewards':
       page = const ClaimedRewardsPage();
+      transitionToUse = TransitionType.slideFromRight;
+      transitionDuration = const Duration(milliseconds: 300);
+      break;
+
+    case 'myVouchers':
+      page = const MyVouchersPage();
       transitionToUse = TransitionType.slideFromRight;
       transitionDuration = const Duration(milliseconds: 300);
       break;

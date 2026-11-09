@@ -66,7 +66,10 @@ class ReferralRepository {
     final deviceId = await _store.deviceId();
     final response = await _api.post(
       '/referral/apply',
-      {'referralCode': normalized},
+      {
+        'referralCode': normalized,
+        'deviceId': deviceId,
+      },
       requireAuth: true,
       headers: {'x-device-id': deviceId},
     );

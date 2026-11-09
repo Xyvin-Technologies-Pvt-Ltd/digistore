@@ -418,6 +418,7 @@ class BookingService {
     String? bookingDate,
     String? startTime,
     String? notes,
+    String? voucherCode,
     Map<String, dynamic>? bookingData,
   }) async {
     final payload =
@@ -435,6 +436,8 @@ class BookingService {
           // Backend requires online payment for paid slots.
           'paymentMethod': 'online',
           if (notes != null && notes.isNotEmpty) 'notes': notes,
+          if (voucherCode != null && voucherCode.trim().isNotEmpty)
+            'voucherCode': voucherCode.trim(),
         };
     final res = await api.post('/bookings', payload);
     if (res.success && res.data != null) {

@@ -260,7 +260,10 @@ void main() {
       final applyRequest = client.requests.single;
       expect(applyRequest.headers['authorization'], 'Bearer user-token');
       expect(applyRequest.headers['x-device-id'], isNotEmpty);
-      expect(jsonDecode(applyRequest.body)['referralCode'], 'S00004');
+      final applyBody = jsonDecode(applyRequest.body) as Map<String, dynamic>;
+      expect(applyBody['referralCode'], 'S00004');
+      expect(applyBody['deviceId'], isNotEmpty);
+      expect(applyBody['deviceId'], applyRequest.headers['x-device-id']);
 
       client.enqueue(400, {
         'success': false,

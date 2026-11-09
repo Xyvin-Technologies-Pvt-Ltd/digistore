@@ -4,11 +4,13 @@ import 'package:intl/intl.dart';
 
 import '../../../data/models/service_model.dart';
 import '../../../data/models/shop_model.dart';
+import '../../../data/models/voucher_models.dart';
 import '../../../data/providers/api_provider.dart';
 import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/providers/services_provider.dart';
 import '../../../data/providers/shops_provider.dart';
 import '../../../data/providers/user_provider.dart';
+import '../../../data/providers/voucher_provider.dart';
 import '../../components/advanced_network_image.dart';
 import '../../components/loading_indicator.dart';
 import 'booking_confirmed_page.dart';
@@ -46,6 +48,10 @@ class BookingSummaryPage extends ConsumerStatefulWidget {
 
 class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
   bool _isSubmitting = false;
+  bool _isValidatingVoucher = false;
+  final _voucherController = TextEditingController();
+  VoucherValidationResult? _voucherResult;
+  String? _voucherError;
 
   int _qtyFor(ServiceModel s) {
     final id = s.id ?? '';
@@ -63,10 +69,70 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
     (sum, s) => sum + (s.totalGstAmount * _qtyFor(s)),
   );
 
+  double get _voucherDiscount =>
+      _voucherResult?.valid == true ? _voucherResult!.discountAmount : 0;
+
+  double get _payableTotal {
+    if (_voucherResult?.valid == true && _voucherResult!.finalAmount > 0) {
+      return _voucherResult!.finalAmount;
+    }
+    final discounted = widget.totalPrice - _voucherDiscount;
+    return discounted < 0 ? 0 : discounted;
+  }
+
   String _money(double value) {
     return value.truncateToDouble() == value
         ? value.toStringAsFixed(0)
         : value.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    _voucherController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _applyVoucher() async {
+    final code = _voucherController.text.trim();
+    if (code.isEmpty) {
+      setState(() {
+        _voucherError = 'Enter a voucher code';
+        _voucherResult = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isValidatingVoucher = true;
+      _voucherError = null;
+    });
+
+    final result = await ref.read(voucherRepositoryProvider).validate(
+          voucherCode: code,
+          cartAmount: widget.totalPrice,
+          category: widget.partner.category,
+          partnerId: widget.partnerId,
+        );
+
+    if (!mounted) return;
+    setState(() {
+      _isValidatingVoucher = false;
+      if (result.valid) {
+        _voucherResult = result;
+        _voucherError = null;
+      } else {
+        _voucherResult = null;
+        _voucherError = result.message;
+      }
+    });
+  }
+
+  void _clearVoucher() {
+    setState(() {
+      _voucherController.clear();
+      _voucherResult = null;
+      _voucherError = null;
+    });
   }
 
   Future<void> _handleConfirmBooking() async {
@@ -80,6 +146,11 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
         )
         .toList();
 
+    final appliedCode = _voucherResult?.valid == true
+        ? (_voucherResult!.voucher?.voucherCode ??
+              _voucherController.text.trim())
+        : null;
+
     final res = await BookingService.createBooking(
       api: ref.read(apiProvider),
       partnerId: widget.partnerId,
@@ -87,6 +158,7 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
       bookingDate: widget.bookingDate,
       startTime: widget.selectedSlot.startTime,
       notes: widget.notes.isNotEmpty ? widget.notes : null,
+      voucherCode: appliedCode,
     );
 
     if (!mounted) return;
@@ -253,6 +325,8 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
                       userName: user?.name,
                       userPhone: user?.phone,
                     ),
+                    SizedBox(height: screenSize.responsivePadding(16)),
+                    _buildVoucherCard(screenSize: screenSize),
                     SizedBox(height: screenSize.responsivePadding(24)),
                   ],
                 ),
@@ -494,16 +568,25 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
             label: 'GST',
             value: '+ ₹${_money(_totalGst)}',
           ),
+          if (_voucherDiscount > 0) ...[
+            const SizedBox(height: 10),
+            _buildDetailRow(
+              label: 'Voucher Discount',
+              value: '- ₹${_money(_voucherDiscount)}',
+              valueColor: const Color(0xFF07982C),
+              isValueBold: true,
+            ),
+          ],
           const SizedBox(height: 10),
           _buildDetailRow(
             label: 'Total (incl. GST)',
-            value: '₹${_money(widget.totalPrice)}',
+            value: '₹${_money(_payableTotal)}',
             isValueBold: true,
           ),
           const SizedBox(height: 10),
           _buildDetailRow(
             label: 'Payment Mode',
-            value: widget.totalPrice > 0 ? 'Pay Online' : 'Free',
+            value: _payableTotal > 0 ? 'Pay Online' : 'Free',
           ),
 
           Padding(
@@ -533,6 +616,144 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
               child: Container(height: 1, color: const Color(0xFFEDEDED)),
             ),
             _buildDetailRow(label: 'Notes', value: widget.notes),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVoucherCard({required ScreenSizeData screenSize}) {
+    final applied = _voucherResult?.valid == true;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      padding: EdgeInsets.all(screenSize.responsivePadding(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Have a voucher?',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1C1C1C),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _voucherController,
+                  enabled: !applied && !_isValidatingVoucher,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    hintText: 'Enter voucher code',
+                    hintStyle: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF9FAFB),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF6155F5)),
+                    ),
+                    disabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                  ),
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
+                  ),
+                  onSubmitted: (_) => _applyVoucher(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _isValidatingVoucher
+                      ? null
+                      : (applied ? _clearVoucher : _applyVoucher),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: applied
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF6155F5),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  child: _isValidatingVoucher
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          applied ? 'Remove' : 'Apply',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+          if (_voucherError != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _voucherError!,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                color: Color(0xFFB91C1C),
+              ),
+            ),
+          ],
+          if (applied) ...[
+            const SizedBox(height: 10),
+            Text(
+              _voucherResult!.message.isNotEmpty
+                  ? _voucherResult!.message
+                  : 'Voucher applied',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF07982C),
+              ),
+            ),
           ],
         ],
       ),
@@ -616,8 +837,8 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
             child: _isSubmitting
                 ? const LoadingAnimation(size: 24, loadingColor: Colors.white)
                 : Text(
-                    widget.totalPrice > 0
-                        ? 'Pay ₹${_money(widget.totalPrice)}'
+                    _payableTotal > 0
+                        ? 'Pay ₹${_money(_payableTotal)}'
                         : 'Confirm Booking',
                     style: TextStyle(
                       fontFamily: 'Poppins',

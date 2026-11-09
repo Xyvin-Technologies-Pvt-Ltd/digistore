@@ -133,24 +133,53 @@ class ApiProvider {
     return headers;
   }
 
+  /// Returns decoded JSON, or `null` when the body is empty / not JSON
+  /// (e.g. HTML 404 pages from nginx).
+  dynamic _tryDecodeJson(String body) {
+    final trimmed = body.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      return json.decode(trimmed);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _nonJsonErrorMessage(int statusCode) {
+    if (statusCode == 404) {
+      return 'This feature is not available yet.';
+    }
+    return 'Unexpected server response. Please try again.';
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> get(
     String endpoint, {
     bool requireAuth = true,
     Map<String, String>? queryParams,
+    Map<String, String>? headers,
   }) async {
     try {
-      final headers = await _buildHeaders(requireAuth: requireAuth);
+      final builtHeaders = await _buildHeaders(requireAuth: requireAuth);
+      if (headers != null) {
+        builtHeaders.addAll(headers);
+      }
       final uri = Uri.parse('$baseUrl$endpoint');
       final uriWithParams = queryParams != null && queryParams.isNotEmpty
           ? uri.replace(queryParameters: queryParams)
           : uri;
-_safeLog('headers', headers.toString());
-      final response = await _client.get(uriWithParams, headers: headers);
+      _safeLog('headers', builtHeaders.toString());
+      final response = await _client.get(uriWithParams, headers: builtHeaders);
 
       _safeLog('API GET', '$baseUrl$endpoint');
-      final decoded = json.decode(response.body);
+      final decoded = _tryDecodeJson(response.body);
       _safeLog('DATA', response.body);
       _safeLog('QUERY PARAMS', queryParams.toString());
+      if (decoded == null) {
+        return ApiResponse.error(
+          _nonJsonErrorMessage(response.statusCode),
+          response.statusCode,
+        );
+      }
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return ApiResponse.success(decoded, response.statusCode);
       } else {
@@ -195,15 +224,34 @@ _safeLog('headers', headers.toString());
       );
       _safeLog('API POST', '$baseUrl$endpoint');
       _safeLog('API POST body', json.encode(data));
-      final decoded = json.decode(response.body);
-      _safeLog('API POST data ', '${decoded['data']}');
-      _safeLog('API POST message', '${decoded['message']}');
+      final decoded = _tryDecodeJson(response.body);
+      if (decoded == null) {
+        return ApiResponse.error(
+          _nonJsonErrorMessage(response.statusCode),
+          response.statusCode,
+        );
+      }
+      _safeLog('API POST data ', '${decoded is Map ? decoded['data'] : null}');
+      _safeLog(
+        'API POST message',
+        '${decoded is Map ? decoded['message'] : null}',
+      );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return ApiResponse.success(decoded, response.statusCode);
       } else {
-        final message = decoded['message'] ?? 'Failed to post data';
+        final message = decoded is Map
+            ? (decoded['message'] ?? 'Failed to post data')
+            : 'Failed to post data';
         _safeLog('API POST ERROR', '$message');
-        return ApiResponse.error(message, response.statusCode, decoded);
+        return ApiResponse.error(
+          message.toString(),
+          response.statusCode,
+          decoded is Map<String, dynamic>
+              ? decoded
+              : decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : null,
+        );
       }
     } catch (e, stackTrace) {
       await CrashlyticsService.logError(e, stackTrace);
