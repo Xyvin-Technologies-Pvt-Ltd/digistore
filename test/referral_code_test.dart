@@ -47,6 +47,12 @@ void main() {
       expect(ReferralCode.fromUri(share), 'S00004');
       expect(ReferralCode.isAttributionLink(share), isTrue);
 
+      final apiShare = Uri.parse(
+        'https://api-deals.setgoinnovations.com/app?ref=S00004',
+      );
+      expect(ReferralCode.fromUri(apiShare), 'S00004');
+      expect(ReferralCode.isAttributionLink(apiShare), isTrue);
+
       final scheme = Uri.parse('setgo://referral?code=S00009');
       expect(ReferralCode.fromUri(scheme), 'S00009');
       expect(ReferralCode.isAttributionLink(scheme), isTrue);
@@ -85,6 +91,49 @@ void main() {
       'totalPointsEarned': 10,
     });
     expect(liveShape.earnedRupees, 1);
+  });
+
+  test('share payload rewrites prod landing links to the active API host', () {
+    expect(
+      ReferralCode.landingBaseFromApi(
+        'https://uat-api.setgoinnovations.com/api/mobile',
+      ),
+      'https://uat-api.setgoinnovations.com/app',
+    );
+    expect(
+      ReferralCode.landingBaseFromApi(
+        'https://api-deals.setgoinnovations.com/api/mobile',
+      ),
+      'https://api-deals.setgoinnovations.com/app',
+    );
+
+    final aligned = ReferralSharePayload.fromJson({
+      'referralCode': 'S00001',
+      'shareUrl': 'https://api-deals.setgoinnovations.com/app?ref=S00001',
+      'shareMessage':
+          'Use my code S00001 https://api-deals.setgoinnovations.com/app?ref=S00001',
+    }).alignedToApiBase('https://uat-api.setgoinnovations.com/api/mobile');
+
+    expect(
+      aligned.shareUrl,
+      'https://uat-api.setgoinnovations.com/app?ref=S00001',
+    );
+    expect(
+      aligned.shareMessage,
+      contains('https://uat-api.setgoinnovations.com/app?ref=S00001'),
+    );
+    expect(
+      aligned.shareMessage,
+      isNot(contains('api-deals.setgoinnovations.com')),
+    );
+
+    final prod = aligned.alignedToApiBase(
+      'https://api-deals.setgoinnovations.com/api/mobile',
+    );
+    expect(
+      prod.shareUrl,
+      'https://api-deals.setgoinnovations.com/app?ref=S00001',
+    );
   });
 
   test('send-otp says whether this number already has an account', () {

@@ -100,7 +100,7 @@ class ReferralRepository {
     }
     final payload = ReferralSharePayload.fromJson(data);
     if (payload.referralCode.isEmpty) return null;
-    return payload;
+    return payload.alignedToApiBase(_api.baseUrl);
   }
 
   Future<ReferralHistoryPage> history({int page = 1, int limit = 20}) async {

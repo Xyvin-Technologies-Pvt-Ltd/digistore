@@ -539,7 +539,9 @@ class DeepLinkService {
     return host == 'setgo.in' ||
         host == 'www.setgo.in' ||
         host == 'setgoinnovations.com' ||
-        host == 'www.setgoinnovations.com';
+        host == 'www.setgoinnovations.com' ||
+        host == 'api-deals.setgoinnovations.com' ||
+        host == 'uat-api.setgoinnovations.com';
   }
 
   Future<bool> _captureReferral(Uri uri) async {

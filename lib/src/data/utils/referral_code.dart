@@ -37,6 +37,19 @@ class ReferralCode {
     return extract(value);
   }
 
+  /// Landing page for invite links, derived from the app's API [baseUrl].
+  ///
+  /// `https://uat-api.../api/mobile` → `https://uat-api.../app`
+  /// `https://api-deals.../api/mobile` → `https://api-deals.../app`
+  static String landingBaseFromApi(String apiBaseUrl) {
+    final uri = Uri.tryParse(apiBaseUrl.trim());
+    if (uri == null || uri.host.isEmpty) {
+      return 'https://api-deals.setgoinnovations.com/app';
+    }
+    final scheme = uri.scheme.isEmpty ? 'https' : uri.scheme;
+    return '$scheme://${uri.host}/app';
+  }
+
   /// Reads a code from a share link, custom scheme, or store referrer URL.
   static String? fromUri(Uri uri) {
     for (final key in const ['ref', 'code', 'referralCode', 'utm_campaign']) {
@@ -67,6 +80,8 @@ class ReferralCode {
       'www.setgo.in',
       'setgoinnovations.com',
       'www.setgoinnovations.com',
+      'api-deals.setgoinnovations.com',
+      'uat-api.setgoinnovations.com',
     };
     if (!hosts.contains(host)) return false;
     final segments = uri.pathSegments

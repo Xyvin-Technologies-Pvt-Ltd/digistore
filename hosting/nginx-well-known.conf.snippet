@@ -1,0 +1,15 @@
+# Serve Digital Asset Links / Universal Links as static files.
+# Do NOT fall through to the SPA index.html for these paths.
+location ^~ /.well-known/assetlinks.json {
+  default_type application/json;
+  add_header Content-Type application/json;
+  add_header Cache-Control "public, max-age=300";
+  try_files /.well-known/assetlinks.json =404;
+}
+
+location ^~ /.well-known/apple-app-site-association {
+  default_type application/json;
+  add_header Content-Type application/json;
+  add_header Cache-Control "public, max-age=300";
+  try_files /.well-known/apple-app-site-association =404;
+}

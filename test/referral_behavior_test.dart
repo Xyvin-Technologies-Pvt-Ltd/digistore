@@ -75,7 +75,13 @@ void main() {
       );
       expect(
         ReferralCode.isAttributionLink(
-          Uri.parse('https://www.setgo.in/app?code=S00009'),
+          Uri.parse('https://api-deals.setgoinnovations.com/app?code=S00009'),
+        ),
+        isTrue,
+      );
+      expect(
+        ReferralCode.isAttributionLink(
+          Uri.parse('https://uat-api.setgoinnovations.com/app?ref=S00004'),
         ),
         isTrue,
       );
@@ -588,5 +594,6 @@ ReferralAttribution _attribution(ReferralStore store, ReferralRepository repo) {
     saveIfEmpty: store.saveIfEmpty,
     saveExplicit: store.writeCode,
     secureStorage: SecureStorageService(storage: const FlutterSecureStorage()),
+    enableDeferred: true,
   );
 }

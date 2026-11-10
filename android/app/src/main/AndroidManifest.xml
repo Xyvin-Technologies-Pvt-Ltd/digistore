@@ -43,12 +43,11 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="https" android:host="setgoinnovations.com" android:pathPrefix="/app"/>
-            </intent-filter>
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="www.setgoinnovations.com" android:pathPrefix="/app"/>
+                <data android:scheme="https" android:host="api-deals.setgoinnovations.com" android:pathPrefix="/app"/>
+                <data android:scheme="https" android:host="uat-api.setgoinnovations.com" android:pathPrefix="/app"/>
                 <data android:scheme="https" android:host="setgo.in" android:pathPrefix="/app"/>
+                <data android:scheme="https" android:host="www.setgo.in" android:pathPrefix="/app"/>
             </intent-filter>
         </activity>
         <activity

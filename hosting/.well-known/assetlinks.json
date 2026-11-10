@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.setgoinnovations",
+      "sha256_cert_fingerprints": [
+        "4A:B0:10:17:4B:2A:71:BF:58:2C:A9:CB:6D:FC:91:78:0F:79:9F:94:EB:9A:FA:DD:0A:72:E0:93:69:BD:CC:9A",
+        "44:7D:67:BC:98:CB:DB:FD:3A:D2:BC:44:67:65:CF:AC:9F:E9:AD:E3:11:94:D1:DA:3E:56:8B:4C:8F:D4:C8:77"
+      ]
+    }
+  }
+]

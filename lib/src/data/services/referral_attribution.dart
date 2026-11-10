@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:play_install_referrer/play_install_referrer.dart';
 
@@ -14,6 +15,7 @@ class ReferralAttribution {
   final Future<bool> Function(String code) _saveIfEmpty;
   final Future<void> Function(String code) _saveExplicit;
   final SecureStorageService _secureStorage;
+  final bool enableDeferred;
 
   ReferralAttribution({
     required ReferralRepository repository,
@@ -21,11 +23,16 @@ class ReferralAttribution {
     required Future<bool> Function(String code) saveIfEmpty,
     required Future<void> Function(String code) saveExplicit,
     required SecureStorageService secureStorage,
+    /// Debug/profile installs often inherit an old Play referrer or the same
+    /// Wi‑Fi IP as a recent landing-page click. Keep deferred attribution for
+    /// release builds; tests can force it on.
+    bool? enableDeferred,
   }) : _repository = repository,
        _store = store,
        _saveIfEmpty = saveIfEmpty,
        _saveExplicit = saveExplicit,
-       _secureStorage = secureStorage;
+       _secureStorage = secureStorage,
+       enableDeferred = enableDeferred ?? kReleaseMode;
 
   /// First launch only: Play Install Referrer, then IP match, then clipboard.
   ///
@@ -40,8 +47,18 @@ class ReferralAttribution {
       }
       if (await _store.isDeferredDone()) return;
 
+      if (!enableDeferred) {
+        debugPrint(
+          'Referral: skipping deferred autofill in debug '
+          '(Play referrer / IP / clipboard). Open a referral link to fill.',
+        );
+        await _store.markDeferredDone();
+        return;
+      }
+
       final fromStore = await _readPlayReferrer();
       if (fromStore != null) {
+        debugPrint('Referral: deferred from Play Install Referrer → $fromStore');
         await _saveIfEmpty(fromStore);
         await _store.markDeferredDone();
         return;
@@ -49,6 +66,7 @@ class ReferralAttribution {
 
       final pending = await _repository.resolvePending();
       if (pending.code != null) {
+        debugPrint('Referral: deferred from IP match → ${pending.code}');
         await _saveIfEmpty(pending.code!);
         await _store.markDeferredDone();
         return;
@@ -60,6 +78,7 @@ class ReferralAttribution {
         final fromClipboard = await _readClipboard();
         await _store.markClipboardChecked();
         if (fromClipboard != null) {
+          debugPrint('Referral: deferred from clipboard → $fromClipboard');
           await _saveIfEmpty(fromClipboard);
         }
       }

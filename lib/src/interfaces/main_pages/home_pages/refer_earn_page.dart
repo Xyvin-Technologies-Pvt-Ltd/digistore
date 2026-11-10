@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../data/constants/color_constants.dart';
 import '../../../data/constants/style_constants.dart';
 import '../../../data/models/referral_models.dart';
+import '../../../data/providers/api_provider.dart';
 import '../../../data/providers/referral_provider.dart';
 import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/providers/user_provider.dart';
@@ -138,27 +140,39 @@ class _ReferEarnPageState extends ConsumerState<ReferEarnPage> {
     ToastService().showToast(context, 'Code copied', type: ToastType.success);
   }
 
+  ReferralSharePayload _aligned(ReferralSharePayload payload) {
+    return payload.alignedToApiBase(ref.read(publicApiProvider).baseUrl);
+  }
+
   Future<void> _share(ReferralSharePayload payload) async {
-    final text = payload.shareMessage.isNotEmpty
-        ? payload.shareMessage
-        : 'Use my SetGo referral code ${payload.referralCode}. ${payload.shareUrl}';
+    final aligned = _aligned(payload);
+    final text = aligned.shareMessage.isNotEmpty
+        ? aligned.shareMessage
+        : 'Use my SetGo referral code ${aligned.referralCode}. ${aligned.shareUrl}';
+    debugPrint('Referral shareUrl=${aligned.shareUrl} api=${ref.read(publicApiProvider).baseUrl}');
     await SharePlus.instance.share(
-      ShareParams(text: text, title: payload.shareTitle),
+      ShareParams(text: text, title: aligned.shareTitle),
     );
   }
 
   Future<void> _open(String url, ReferralSharePayload payload) async {
-    if (url.isEmpty) {
-      await _share(payload);
+    final aligned = _aligned(payload);
+    final target = url.contains('whatsapp')
+        ? aligned.whatsappUrl
+        : url.startsWith('sms:')
+            ? aligned.smsUrl
+            : aligned.shareUrl;
+    if (target.isEmpty) {
+      await _share(aligned);
       return;
     }
-    final uri = Uri.tryParse(url);
+    final uri = Uri.tryParse(target);
     if (uri == null) {
-      await _share(payload);
+      await _share(aligned);
       return;
     }
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened) await _share(payload);
+    if (!opened) await _share(aligned);
   }
 
   @override

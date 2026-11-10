@@ -1,3 +1,5 @@
+import '../utils/referral_code.dart';
+
 class ReferralValidation {
   final bool valid;
   final String? code;
@@ -105,6 +107,45 @@ class ReferralSharePayload {
   /// come back equal to [rewardPoints] (both 10). Using it as rupees per
   /// point shows ₹10 for a 10-point reward.
   num get earnedRupees => totalPointsEarned / 10;
+
+  /// Rewrites invite links to match the API host the app is actually using.
+  ///
+  /// UAT backends may still return a production `shareUrl`; this keeps
+  /// WhatsApp / SMS text on the same environment as [apiBaseUrl].
+  ReferralSharePayload alignedToApiBase(String apiBaseUrl) {
+    final code = referralCode.trim().toUpperCase();
+    if (code.isEmpty) return this;
+
+    final correctUrl = '${ReferralCode.landingBaseFromApi(apiBaseUrl)}?ref=$code';
+    // Always rebuild the invite text so a stale production URL cannot survive
+    // string-replace edge cases from older backend payloads.
+    final message =
+        'Hey! I\'m using SetGo to discover local shops, get exclusive '
+        'discounts, and earn reward points on every purchase. Use my referral '
+        'code *$code* when you sign up! Download the app: $correctUrl';
+
+    return ReferralSharePayload(
+      referralCode: referralCode,
+      rewardPoints: rewardPoints,
+      rupeeEquivalent: rupeeEquivalent,
+      successfulReferrals: successfulReferrals,
+      totalPointsEarned: totalPointsEarned,
+      minPurchaseForRedemption: minPurchaseForRedemption,
+      shareTitle: shareTitle,
+      shareMessage: message,
+      shareUrl: correctUrl,
+      whatsappUrl:
+          'https://api.whatsapp.com/send?text=${Uri.encodeComponent(message)}',
+      smsUrl: 'sms:?body=${Uri.encodeComponent(message)}',
+      qrCodeData: qrCodeData,
+      playStoreUrl: playStoreUrl,
+      appStoreUrl: appStoreUrl,
+      deepLink: deepLink.isNotEmpty
+          ? deepLink
+          : 'setgo://referral?code=$code',
+      terms: terms,
+    );
+  }
 }
 
 class ReferralHistoryEntry {
