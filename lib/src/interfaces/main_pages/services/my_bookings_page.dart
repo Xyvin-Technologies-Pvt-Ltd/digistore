@@ -102,7 +102,7 @@ class _MyBookingsPageState extends ConsumerState<MyBookingsPage> {
     );
     if (!mounted) return;
     if (res.success) {
-      ref.invalidate(customerBookingsProvider);
+      ref.invalidate(allCustomerBookingsProvider);
       messenger.showSnackBar(
         const SnackBar(content: Text('Booking cancelled successfully')),
       );
@@ -247,8 +247,10 @@ class _MyBookingsPageState extends ConsumerState<MyBookingsPage> {
 
                 return RefreshIndicator(
                   color: const Color(0xFF07982C),
-                  onRefresh: () async =>
-                      ref.refresh(customerBookingsProvider(_selectedFilter)),
+                  onRefresh: () async {
+                    ref.invalidate(allCustomerBookingsProvider);
+                    await ref.read(allCustomerBookingsProvider.future);
+                  },
                   child: ListView.separated(
                     padding: EdgeInsets.fromLTRB(
                       screenSize.responsivePadding(16),

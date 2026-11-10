@@ -373,39 +373,115 @@ final bookingSlotsProvider =
       );
     });
 
+DateTime? _bookingDateTime(BookingModel booking) {
+  final date = DateTime.tryParse(booking.date);
+  if (date == null) return null;
+
+  final time = booking.timeSlot.trim();
+  if (time.isEmpty) {
+    // Date-only: keep the booking upcoming for the whole calendar day.
+    return DateTime(date.year, date.month, date.day, 23, 59, 59);
+  }
+
+  final amPm = RegExp(
+    r'^(\d{1,2}):(\d{2})\s*(AM|PM)$',
+    caseSensitive: false,
+  ).firstMatch(time);
+  final twentyFour = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(time);
+
+  var hour = 0;
+  var minute = 0;
+  if (amPm != null) {
+    hour = int.tryParse(amPm.group(1)!) ?? 0;
+    minute = int.tryParse(amPm.group(2)!) ?? 0;
+    final period = amPm.group(3)!.toUpperCase();
+    if (period == 'PM' && hour < 12) hour += 12;
+    if (period == 'AM' && hour == 12) hour = 0;
+  } else if (twentyFour != null) {
+    hour = int.tryParse(twentyFour.group(1)!) ?? 0;
+    minute = int.tryParse(twentyFour.group(2)!) ?? 0;
+  } else {
+    return DateTime(date.year, date.month, date.day, 23, 59, 59);
+  }
+
+  return DateTime(date.year, date.month, date.day, hour, minute);
+}
+
+/// Client-side filter for My Bookings tabs.
+///
+/// API booking statuses are PENDING / CONFIRMED / IN_PROGRESS / COMPLETED /
+/// CANCELLED / NO_SHOW — not conceptual labels like "upcoming" / "past".
+List<BookingModel> _filterCustomerBookings(
+  List<BookingModel> bookings,
+  String statusFilter,
+) {
+  final filter = statusFilter.toLowerCase().trim();
+  if (filter.isEmpty || filter == 'all') return bookings;
+
+  final now = DateTime.now();
+
+  bool isCancelled(BookingModel b) => b.status.toUpperCase() == 'CANCELLED';
+
+  bool isPast(BookingModel b) {
+    final status = b.status.toUpperCase();
+    if (status == 'CANCELLED') return false;
+    if (status == 'COMPLETED' || status == 'NO_SHOW') return true;
+    final dt = _bookingDateTime(b);
+    if (dt == null) return false;
+    return dt.isBefore(now);
+  }
+
+  bool isUpcoming(BookingModel b) {
+    if (isCancelled(b) || isPast(b)) return false;
+    final status = b.status.toUpperCase();
+    return status == 'PENDING' ||
+        status == 'CONFIRMED' ||
+        status == 'IN_PROGRESS';
+  }
+
+  switch (filter) {
+    case 'upcoming':
+      return bookings.where(isUpcoming).toList();
+    case 'past':
+      return bookings.where(isPast).toList();
+    case 'cancelled':
+      return bookings.where(isCancelled).toList();
+    default:
+      return bookings;
+  }
+}
+
+// Fetches all customer bookings once; tabs filter client-side.
+final allCustomerBookingsProvider = FutureProvider<List<BookingModel>>((
+  ref,
+) async {
+  final api = ref.watch(apiProvider);
+  final res = await api.get('/bookings/my-bookings');
+  if (res.success && res.data != null) {
+    final rawList = _extractServicesList(res.data);
+    final List<BookingModel> list = [];
+    for (var item in rawList) {
+      if (item is Map) {
+        try {
+          list.add(BookingModel.fromJson(Map<String, dynamic>.from(item)));
+        } catch (_) {}
+      }
+    }
+    return list;
+  }
+  return [];
+});
+
 // Customer bookings provider with status filter family
 final customerBookingsProvider =
-    FutureProvider.family<List<BookingModel>, String>((
+    Provider.family<AsyncValue<List<BookingModel>>, String>((
       ref,
       statusFilter,
-    ) async {
-      final api = ref.watch(apiProvider);
-      final queryParams = <String, String>{};
-      if (statusFilter.isNotEmpty && statusFilter.toLowerCase() != 'all') {
-        final s = statusFilter.toLowerCase();
-        if (s == 'past') {
-          queryParams['status'] = 'COMPLETED';
-        } else {
-          queryParams['status'] = statusFilter.toUpperCase();
-        }
-      }
-      final res = await api.get(
-        '/bookings/my-bookings',
-        queryParams: queryParams,
+    ) {
+      final async = ref.watch(allCustomerBookingsProvider);
+      return async.whenData(
+        (list) => _filterCustomerBookings(list, statusFilter),
       );
-      if (res.success && res.data != null) {
-        final rawList = _extractServicesList(res.data);
-        final List<BookingModel> list = [];
-        for (var item in rawList) {
-          if (item is Map) {
-            try {
-              list.add(BookingModel.fromJson(Map<String, dynamic>.from(item)));
-            } catch (_) {}
-          }
-        }
-        return list;
-      }
-      return [];
     });
 
 class BookingService {
