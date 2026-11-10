@@ -176,7 +176,7 @@ class _VoucherTab extends ConsumerWidget {
       case 'expired':
         return 'Expired vouchers will appear in this tab.';
       default:
-        return 'Apply a referral code or spin & win after booking to earn vouchers.';
+        return 'Apply a referral code or complete bookings to earn vouchers.';
     }
   }
 }

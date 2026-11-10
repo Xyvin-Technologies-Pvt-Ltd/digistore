@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../models/category_model.dart';
+import '../models/booking_estimate.dart';
 import '../models/booking_razorpay_order.dart';
 import '../models/service_model.dart';
 import '../utils/name_case.dart';
@@ -408,6 +409,44 @@ final customerBookingsProvider =
     });
 
 class BookingService {
+  /// POST /bookings/estimate — server pricing preview (voucher before GST).
+  ///
+  /// Auth is required when [voucherCode] is sent (voucher ownership check).
+  static Future<ApiResponse<BookingEstimate>> estimate({
+    required ApiProvider api,
+    required String partnerId,
+    required List<Map<String, dynamic>> items,
+    String? voucherCode,
+  }) async {
+    final code = voucherCode?.trim();
+    final payload = <String, dynamic>{
+      'partnerId': partnerId,
+      'items': items,
+      if (code != null && code.isNotEmpty) 'voucherCode': code,
+    };
+
+    final res = await api.post(
+      '/bookings/estimate',
+      payload,
+      requireAuth: code != null && code.isNotEmpty,
+    );
+
+    if (res.success && res.data != null) {
+      final data = res.data!['data'] ?? res.data!;
+      if (data is Map) {
+        return ApiResponse.success(
+          BookingEstimate.fromJson(
+            Map<String, dynamic>.from(data),
+            message: res.data!['message']?.toString() ?? res.message,
+          ),
+        );
+      }
+    }
+    return ApiResponse.error(
+      res.message ?? 'Could not estimate booking price',
+    );
+  }
+
   static Future<ApiResponse<CreateBookingResult>> createBooking({
     required ApiProvider api,
     String? partnerId,

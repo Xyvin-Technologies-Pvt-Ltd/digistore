@@ -17,8 +17,3 @@ final myVouchersProvider =
     FutureProvider.family<List<VoucherModel>, String>((ref, status) async {
       return ref.watch(voucherRepositoryProvider).myVouchers(status: status);
     });
-
-final spinStatusProvider =
-    FutureProvider.family<SpinStatus, String>((ref, transactionId) async {
-      return ref.watch(voucherRepositoryProvider).spinStatus(transactionId);
-    });

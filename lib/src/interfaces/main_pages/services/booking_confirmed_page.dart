@@ -2,76 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/service_model.dart';
-import '../../../data/models/voucher_models.dart';
 import '../../../data/providers/screen_size_provider.dart';
-import '../../../data/providers/voucher_provider.dart';
 import 'my_bookings_page.dart';
-import 'spin_win_page.dart';
 
-class BookingConfirmedPage extends ConsumerStatefulWidget {
+class BookingConfirmedPage extends ConsumerWidget {
   final BookingModel booking;
 
   const BookingConfirmedPage({super.key, required this.booking});
-
-  @override
-  ConsumerState<BookingConfirmedPage> createState() =>
-      _BookingConfirmedPageState();
-}
-
-class _BookingConfirmedPageState extends ConsumerState<BookingConfirmedPage> {
-  SpinStatus? _spinStatus;
-  bool _spinChecked = false;
-
-  BookingModel get booking => widget.booking;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkSpin());
-  }
-
-  Future<void> _checkSpin() async {
-    if (booking.id.isEmpty) {
-      setState(() => _spinChecked = true);
-      return;
-    }
-    final status =
-        await ref.read(voucherRepositoryProvider).spinStatus(booking.id);
-    if (!mounted) return;
-    setState(() {
-      _spinStatus = status;
-      _spinChecked = true;
-    });
-  }
-
-  Future<void> _openSpin() async {
-    final status = _spinStatus;
-    if (status == null || !status.hasSpinAvailable) return;
-    final result = await Navigator.push<SpinResult?>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SpinWinPage(
-          transactionId: booking.id,
-          status: status,
-        ),
-      ),
-    );
-    if (!mounted) return;
-    if (result != null) {
-      setState(() {
-        _spinStatus = SpinStatus(
-          hasSpinAvailable: false,
-          alreadySpun: true,
-          campaignId: status.campaignId,
-          campaignTitle: status.campaignTitle,
-          grandPrizeAmount: status.grandPrizeAmount,
-        );
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reward unlocked: ${result.label}')),
-      );
-    }
-  }
 
   String _formatDate(String dateStr) {
     if (dateStr.isEmpty) return '';
@@ -101,7 +38,7 @@ class _BookingConfirmedPageState extends ConsumerState<BookingConfirmedPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final screenSize = ref.watch(screenSizeProvider);
 
     // Format fields
@@ -316,11 +253,6 @@ class _BookingConfirmedPageState extends ConsumerState<BookingConfirmedPage> {
                           ],
                         ),
                       ),
-                      if (_spinChecked &&
-                          _spinStatus?.hasSpinAvailable == true) ...[
-                        SizedBox(height: screenSize.responsivePadding(8)),
-                        _buildSpinBanner(screenSize.responsivePadding(16)),
-                      ],
                       SizedBox(height: screenSize.responsivePadding(24)),
                     ],
                   ),
@@ -337,34 +269,6 @@ class _BookingConfirmedPageState extends ConsumerState<BookingConfirmedPage> {
                 ),
                 child: Column(
                   children: [
-                    if (_spinChecked &&
-                        _spinStatus?.hasSpinAvailable == true) ...[
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton.icon(
-                          onPressed: _openSpin,
-                          icon: const Icon(Icons.casino_rounded),
-                          label: const Text(
-                            'Spin & Win',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFBBF24),
-                            foregroundColor: const Color(0xFF111827),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: screenSize.responsivePadding(12)),
-                    ],
                     // View Booking Details Button
                     SizedBox(
                       width: double.infinity,
@@ -435,43 +339,6 @@ class _BookingConfirmedPageState extends ConsumerState<BookingConfirmedPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSpinBanner(double padding) {
-    final title = _spinStatus?.campaignTitle ?? 'Spin & Win';
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(padding),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6D0BB2), Color(0xFFBE6AF1)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'You unlocked a spin!',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-          ),
-        ],
       ),
     );
   }

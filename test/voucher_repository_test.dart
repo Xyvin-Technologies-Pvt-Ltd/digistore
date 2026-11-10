@@ -143,46 +143,4 @@ void main() {
     expect(bad.message, contains('Minimum purchase'));
   });
 
-  test('spin status and spin send device id', () async {
-    client.enqueue(200, {
-      'success': true,
-      'data': {
-        'hasSpinAvailable': true,
-        'campaignId': 'camp1',
-        'campaignTitle': 'Spin & Win',
-        'grandPrizeAmount': 1000,
-      },
-    });
-    final status = await repo.spinStatus('tx1');
-    expect(status.hasSpinAvailable, isTrue);
-    expect(status.campaignId, 'camp1');
-    expect(
-      client.requests.last.url.path,
-      endsWith('/vouchers/spin-status/tx1'),
-    );
-
-    client.enqueue(200, {
-      'success': true,
-      'message': '10% Off Dine-In',
-      'data': {
-        'rewardType': 'percentage_voucher',
-        'value': 10,
-        'label': '10% Off Dine-In',
-        'isGrandPrize': false,
-        'voucherCode': 'SPIN-89X2KL',
-        'pointsAwarded': 0,
-        'spinRecordId': 'spin1',
-      },
-    });
-    final result = await repo.spin(campaignId: 'camp1', transactionId: 'tx1');
-    expect(result, isNotNull);
-    expect(result!.voucherCode, 'SPIN-89X2KL');
-    expect(result.label, '10% Off Dine-In');
-    final spinBody =
-        jsonDecode(client.requests.last.body) as Map<String, dynamic>;
-    expect(spinBody['transactionId'], 'tx1');
-    expect(spinBody['deviceId'], isNotEmpty);
-    expect(client.requests.last.headers['x-device-id'], spinBody['deviceId']);
-    expect(client.requests.last.url.path, endsWith('/vouchers/spin/camp1'));
-  });
 }

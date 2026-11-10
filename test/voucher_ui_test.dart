@@ -5,7 +5,6 @@ import 'package:setgo/src/data/models/voucher_models.dart';
 import 'package:setgo/src/data/providers/screen_size_provider.dart';
 import 'package:setgo/src/data/providers/voucher_provider.dart';
 import 'package:setgo/src/interfaces/main_pages/home_pages/my_vouchers_page.dart';
-import 'package:setgo/src/interfaces/main_pages/services/spin_win_page.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -61,30 +60,5 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(find.text('No active vouchers'), findsOneWidget);
-  });
-
-  testWidgets('Spin & Win shows campaign and spin button', (tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: ScreenSizeScope(
-            child: SpinWinPage(
-              transactionId: 'tx1',
-              status: SpinStatus(
-                hasSpinAvailable: true,
-                campaignId: 'camp1',
-                campaignTitle: 'SetGo Spin & Win ₹1,000 Cashback',
-                grandPrizeAmount: 1000,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-    expect(find.text('Spin & Win'), findsWidgets);
-    expect(find.text('SetGo Spin & Win ₹1,000 Cashback'), findsOneWidget);
-    expect(find.text('Spin Now'), findsOneWidget);
   });
 }

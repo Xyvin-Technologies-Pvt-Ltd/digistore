@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../data/models/booking_estimate.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/models/shop_model.dart';
-import '../../../data/models/voucher_models.dart';
 import '../../../data/providers/api_provider.dart';
 import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/providers/services_provider.dart';
 import '../../../data/providers/shops_provider.dart';
 import '../../../data/providers/user_provider.dart';
-import '../../../data/providers/voucher_provider.dart';
 import '../../components/advanced_network_image.dart';
 import '../../components/loading_indicator.dart';
 import 'booking_confirmed_page.dart';
@@ -50,7 +49,7 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
   bool _isSubmitting = false;
   bool _isValidatingVoucher = false;
   final _voucherController = TextEditingController();
-  VoucherValidationResult? _voucherResult;
+  BookingEstimate? _estimate;
   String? _voucherError;
 
   int _qtyFor(ServiceModel s) {
@@ -59,25 +58,49 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
     return (widget.quantities[id] ?? 1).clamp(1, 99);
   }
 
-  double get _subtotalExGst => widget.services.fold(
-    0.0,
-    (sum, s) => sum + (s.taxableAmount * _qtyFor(s)),
-  );
+  List<Map<String, dynamic>> get _bookingItems => widget.services
+      .where((s) => s.id != null && s.id!.isNotEmpty)
+      .map(
+        (s) => <String, dynamic>{
+          'serviceId': s.id,
+          'quantity': _qtyFor(s),
+        },
+      )
+      .toList();
 
-  double get _totalGst => widget.services.fold(
-    0.0,
-    (sum, s) => sum + (s.totalGstAmount * _qtyFor(s)),
-  );
+  double get _subtotalExGst {
+    if (_estimate != null) {
+      return _estimate!.subtotal > 0
+          ? _estimate!.subtotal
+          : _estimate!.grossAmount;
+    }
+    return widget.services.fold(
+      0.0,
+      (sum, s) => sum + (s.taxableAmount * _qtyFor(s)),
+    );
+  }
 
-  double get _voucherDiscount =>
-      _voucherResult?.valid == true ? _voucherResult!.discountAmount : 0;
+  double get _totalGst {
+    if (_estimate != null) return _estimate!.totalGstAmount;
+    return widget.services.fold(
+      0.0,
+      (sum, s) => sum + (s.totalGstAmount * _qtyFor(s)),
+    );
+  }
+
+  double get _voucherDiscount => _estimate?.voucherDiscount ?? 0;
+
+  /// Estimate is only fetched when applying a voucher code.
+  bool get _voucherApplied => _estimate != null;
 
   double get _payableTotal {
-    if (_voucherResult?.valid == true && _voucherResult!.finalAmount > 0) {
-      return _voucherResult!.finalAmount;
+    if (_estimate != null) {
+      final total = _estimate!.totalAmount > 0
+          ? _estimate!.totalAmount
+          : _estimate!.customerPays;
+      return total < 0 ? 0 : total;
     }
-    final discounted = widget.totalPrice - _voucherDiscount;
-    return discounted < 0 ? 0 : discounted;
+    return widget.totalPrice < 0 ? 0 : widget.totalPrice;
   }
 
   String _money(double value) {
@@ -97,7 +120,15 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
     if (code.isEmpty) {
       setState(() {
         _voucherError = 'Enter a voucher code';
-        _voucherResult = null;
+        _estimate = null;
+      });
+      return;
+    }
+
+    if (_bookingItems.isEmpty) {
+      setState(() {
+        _voucherError = 'Select at least one service';
+        _estimate = null;
       });
       return;
     }
@@ -107,22 +138,27 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
       _voucherError = null;
     });
 
-    final result = await ref.read(voucherRepositoryProvider).validate(
-          voucherCode: code,
-          cartAmount: widget.totalPrice,
-          category: widget.partner.category,
-          partnerId: widget.partnerId,
-        );
+    // Server recalculates subtotal, applies voucher before GST, returns payable.
+    final res = await BookingService.estimate(
+      api: ref.read(apiProvider),
+      partnerId: widget.partnerId,
+      items: _bookingItems,
+      voucherCode: code,
+    );
 
     if (!mounted) return;
     setState(() {
       _isValidatingVoucher = false;
-      if (result.valid) {
-        _voucherResult = result;
+      if (res.success && res.data != null) {
+        _estimate = res.data;
         _voucherError = null;
+        final applied = res.data!.voucherCode?.trim();
+        if (applied != null && applied.isNotEmpty) {
+          _voucherController.text = applied;
+        }
       } else {
-        _voucherResult = null;
-        _voucherError = result.message;
+        _estimate = null;
+        _voucherError = res.message ?? 'Could not apply voucher';
       }
     });
   }
@@ -130,7 +166,7 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
   void _clearVoucher() {
     setState(() {
       _voucherController.clear();
-      _voucherResult = null;
+      _estimate = null;
       _voucherError = null;
     });
   }
@@ -139,16 +175,12 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
-    final items = widget.services
-        .where((s) => s.id != null && s.id!.isNotEmpty)
-        .map(
-          (s) => <String, dynamic>{'serviceId': s.id, 'quantity': _qtyFor(s)},
-        )
-        .toList();
+    final items = _bookingItems;
 
-    final appliedCode = _voucherResult?.valid == true
-        ? (_voucherResult!.voucher?.voucherCode ??
-              _voucherController.text.trim())
+    final appliedCode = _voucherApplied
+        ? (_estimate?.voucherCode?.trim().isNotEmpty == true
+              ? _estimate!.voucherCode!.trim()
+              : _voucherController.text.trim())
         : null;
 
     final res = await BookingService.createBooking(
@@ -548,13 +580,12 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
             child: Container(height: 1, color: const Color(0xFFEDEDED)),
           ),
 
-          // Section 2: Pricing & Payment (GST-inclusive total)
+          // Section 2: Pricing — voucher is deducted before GST (server estimate).
           _buildDetailRow(
             label: 'Service amount',
-            value:
-                '₹${_money(_subtotalExGst)}',
+            value: '₹${_money(_subtotalExGst)}',
           ),
-          if (savings > 0) ...[
+          if (savings > 0 && _estimate == null) ...[
             const SizedBox(height: 10),
             _buildDetailRow(
               label: 'Offer Discount',
@@ -563,11 +594,6 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
               isValueBold: true,
             ),
           ],
-          const SizedBox(height: 10),
-          _buildDetailRow(
-            label: 'GST',
-            value: '+ ₹${_money(_totalGst)}',
-          ),
           if (_voucherDiscount > 0) ...[
             const SizedBox(height: 10),
             _buildDetailRow(
@@ -577,6 +603,11 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
               isValueBold: true,
             ),
           ],
+          const SizedBox(height: 10),
+          _buildDetailRow(
+            label: 'GST',
+            value: '+ ₹${_money(_totalGst)}',
+          ),
           const SizedBox(height: 10),
           _buildDetailRow(
             label: 'Total (incl. GST)',
@@ -623,7 +654,12 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
   }
 
   Widget _buildVoucherCard({required ScreenSizeData screenSize}) {
-    final applied = _voucherResult?.valid == true;
+    final applied = _voucherApplied;
+    final successMessage = _estimate?.message.trim().isNotEmpty == true
+        ? _estimate!.message
+        : (_voucherDiscount > 0
+              ? 'Voucher applied: ₹${_money(_voucherDiscount)} discount!'
+              : 'Voucher applied');
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -744,9 +780,7 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
           if (applied) ...[
             const SizedBox(height: 10),
             Text(
-              _voucherResult!.message.isNotEmpty
-                  ? _voucherResult!.message
-                  : 'Voucher applied',
+              successMessage,
               style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 12,

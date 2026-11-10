@@ -93,52 +93,6 @@ class VoucherRepository {
           );
   }
 
-  /// GET /vouchers/spin-status/:transactionId
-  Future<SpinStatus> spinStatus(String transactionId) async {
-    final id = transactionId.trim();
-    if (id.isEmpty) return const SpinStatus.unavailable();
-
-    final response = await _api.get(
-      '/vouchers/spin-status/$id',
-      requireAuth: true,
-      headers: await _deviceHeaders(),
-    );
-    final body = response.data;
-    if (!response.success || body == null || body['success'] != true) {
-      return const SpinStatus.unavailable();
-    }
-    final data = _asMap(body['data']);
-    if (data == null) return const SpinStatus.unavailable();
-    return SpinStatus.fromJson(data);
-  }
-
-  /// POST /vouchers/spin/:campaignId
-  Future<SpinResult?> spin({
-    required String campaignId,
-    required String transactionId,
-  }) async {
-    final deviceId = await _store.deviceId();
-    final response = await _api.post(
-      '/vouchers/spin/$campaignId',
-      {
-        'transactionId': transactionId,
-        'deviceId': deviceId,
-      },
-      requireAuth: true,
-      headers: {'x-device-id': deviceId},
-    );
-    final body = response.data;
-    if (!response.success || body == null || body['success'] != true) {
-      return null;
-    }
-    final data = _asMap(body['data']);
-    if (data == null) return null;
-    return SpinResult.fromJson(
-      data,
-      message: body['message']?.toString(),
-    );
-  }
-
   static Map<String, dynamic>? _asMap(dynamic value) {
     if (value is Map<String, dynamic>) return value;
     if (value is Map) return Map<String, dynamic>.from(value);
