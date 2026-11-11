@@ -4,6 +4,7 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+<!--
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:setgo.in</string>
@@ -13,5 +14,6 @@
 		<string>applinks:api-deals.setgoinnovations.com</string>
 		<string>applinks:uat-api.setgoinnovations.com</string>
 	</array>
+-->
 </dict>
 </plist>
