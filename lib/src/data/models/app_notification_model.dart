@@ -1,7 +1,7 @@
 class NotificationAction {
   /// Backend enum: open_offer | open_shop | open_reward | open_url |
   /// open_screen | open_profile | open_subscription | open_branch |
-  /// open_booking | none
+  /// open_booking | open_product_inquiry | none
   final String type;
   final String? targetId;
   final String? url;
@@ -98,6 +98,20 @@ class AppNotificationModel {
       );
     }
 
+    String? resolveTargetId() =>
+        (json['actionTargetId'] ??
+                json['targetId'] ??
+                metadata?['inquiryId'] ??
+                metadata?['cartId'] ??
+                json['inquiryId'] ??
+                json['cartId'] ??
+                metadata?['offerId'] ??
+                metadata?['partnerId'] ??
+                metadata?['shopId'] ??
+                metadata?['rewardId'] ??
+                json['id'])
+            ?.toString();
+
     // FCM / flattened payloads sometimes put action fields at the root.
     if (action == null || !action.isNavigable) {
       final actionType =
@@ -111,19 +125,22 @@ class AppNotificationModel {
       if (looksLikeAction) {
         action = NotificationAction(
           type: actionType,
-          targetId:
-              (json['actionTargetId'] ??
-                      json['targetId'] ??
-                      json['id'] ??
-                      metadata?['offerId'] ??
-                      metadata?['partnerId'] ??
-                      metadata?['shopId'] ??
-                      metadata?['rewardId'])
-                  ?.toString(),
+          targetId: resolveTargetId(),
           url: (json['actionUrl'] ?? json['url'] ?? metadata?['url'])
               ?.toString(),
           screen: (json['actionScreen'] ?? json['screen'] ?? metadata?['screen'])
               ?.toString(),
+        );
+      }
+    } else if (action.targetId == null || action.targetId!.isEmpty) {
+      // Nested action may omit targetId while metadata carries cartId/inquiryId.
+      final fallbackId = resolveTargetId();
+      if (fallbackId != null && fallbackId.isNotEmpty) {
+        action = NotificationAction(
+          type: action.type,
+          targetId: fallbackId,
+          url: action.url,
+          screen: action.screen,
         );
       }
     }

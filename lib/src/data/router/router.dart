@@ -31,6 +31,7 @@ import '../../interfaces/main_pages/offers.dart';
 import '../../interfaces/main_pages/products.dart';
 import '../../interfaces/main_pages/partner/partner_history.dart';
 import '../../interfaces/main_pages/partner/partner_bookings_page.dart';
+import '../../interfaces/main_pages/partner/partner_inquiry_detail_page.dart';
 import '../../interfaces/main_pages/partner/sales_calculator_page.dart';
 import '../../interfaces/main_pages/partner/partner_reviews_page.dart';
 import '../../interfaces/main_pages/partner/partner_faq_page.dart';
@@ -348,6 +349,27 @@ Route<dynamic> generateRoute(RouteSettings? settings) {
 
     case 'partnerBookings':
       page = const PartnerBookingsPage();
+      transitionToUse = TransitionType.slideFromRight;
+      transitionDuration = const Duration(milliseconds: 300);
+      break;
+
+    case 'partnerInquiryDetail':
+    case 'partner-inquiry-detail':
+    case 'partnerinquirydetail':
+      final args = settings?.arguments;
+      String inquiryId = '';
+      if (args is Map) {
+        inquiryId =
+            (args['inquiryId'] ??
+                    args['cartId'] ??
+                    args['id'] ??
+                    args['targetId'] ??
+                    '')
+                .toString();
+      } else if (args is String) {
+        inquiryId = args;
+      }
+      page = PartnerInquiryDetailPage(inquiryId: inquiryId);
       transitionToUse = TransitionType.slideFromRight;
       transitionDuration = const Duration(milliseconds: 300);
       break;

@@ -85,10 +85,30 @@ class NotificationController {
 
       if (deepLink == null) {
         final screen = payload['screen'] ?? payload['actionScreen'];
-        final id = payload['id'] ?? payload['actionTargetId'];
+        final actionType =
+            (payload['actionType'] ?? payload['action_type'] ?? '')
+                .toLowerCase();
+        final id = payload['actionTargetId'] ??
+            payload['targetId'] ??
+            payload['inquiryId'] ??
+            payload['cartId'] ??
+            payload['id'];
+
         if (screen != null) {
           // Construct the internal app link format expected by DeepLinkService
           deepLink = 'app://$screen${id != null ? '/$id' : ''}';
+        } else if (actionType == 'open_product_inquiry' &&
+            id != null &&
+            id.isNotEmpty) {
+          deepLink = 'app://partnerinquirydetail/$id';
+        } else if (actionType == 'open_offer' && id != null && id.isNotEmpty) {
+          deepLink = 'app://offerdetail/$id';
+        } else if ((actionType == 'open_shop' || actionType == 'open_branch') &&
+            id != null &&
+            id.isNotEmpty) {
+          deepLink = 'app://shopdetail/$id';
+        } else if (actionType == 'open_reward' && id != null && id.isNotEmpty) {
+          deepLink = 'app://rewarddetail/$id';
         }
       }
 

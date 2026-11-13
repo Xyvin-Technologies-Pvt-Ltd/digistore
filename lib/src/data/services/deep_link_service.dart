@@ -22,6 +22,8 @@ class DeepLinkService {
   final Ref _ref;
   final _appLinks = AppLinks();
   Uri? _pendingDeepLink;
+  String? _lastNavigatedInquiryId;
+  DateTime? _lastInquiryNavAt;
 
   DeepLinkService(this._ref);
 
@@ -29,6 +31,10 @@ class DeepLinkService {
 
   void clearPendingDeepLink() {
     _pendingDeepLink = null;
+  }
+
+  void setPendingDeepLink(Uri uri) {
+    _pendingDeepLink = uri;
   }
 
   static bool _isInitialized = false;
@@ -148,6 +154,14 @@ class DeepLinkService {
           case 'open_booking':
             await _navigateToBookings();
             return;
+          case 'open_product_inquiry':
+            final inquiryId =
+                action.targetId ??
+                meta('inquiryId') ??
+                meta('cartId') ??
+                meta('id');
+            await _navigateToPartnerInquiry(inquiryId);
+            return;
           default:
             break;
         }
@@ -157,10 +171,18 @@ class DeepLinkService {
       final offerId = meta('offerId');
       final shopId = meta('partnerId') ?? meta('shopId');
       final rewardId = meta('rewardId');
+      final inquiryId =
+          meta('inquiryId') ?? meta('cartId') ?? action?.targetId;
       final url = meta('url') ?? action?.url;
       final kind = (meta('kind') ?? notification.type ?? '').toLowerCase();
 
-      if (offerId != null && offerId.isNotEmpty) {
+      if (inquiryId != null &&
+          inquiryId.isNotEmpty &&
+          (kind.contains('inquiry') ||
+              kind.contains('cart') ||
+              action?.type == 'open_product_inquiry')) {
+        await _navigateToPartnerInquiry(inquiryId);
+      } else if (offerId != null && offerId.isNotEmpty) {
         await _navigateToOffer(offerId);
       } else if (shopId != null && shopId.isNotEmpty) {
         await _navigateToShop(shopId);
@@ -174,6 +196,8 @@ class DeepLinkService {
         await _openMainTab('Shops');
       } else if (kind.contains('reward')) {
         await _openMainTab('Rewards');
+      } else if (kind.contains('inquiry') || kind.contains('cart')) {
+        await _navigateToPartnerInquiry(inquiryId);
       } else {
         debugPrint('📩 No navigable action on notification ${notification.id}');
       }
@@ -267,6 +291,96 @@ class DeepLinkService {
     await _openMainTab('Products & Services');
   }
 
+  /// Partner-only: open inquiry details for notification / deep link.
+  ///
+  /// Backend contract: notification `action.targetId` (or `metadata.cartId`)
+  /// is the inquiry id accepted by `GET /mobile/partner/inquiries/:id`.
+  Future<void> _navigateToPartnerInquiry(
+    String? inquiryId, {
+    bool fromDeepLink = false,
+  }) async {
+    try {
+      final id = inquiryId?.trim() ?? '';
+      if (id.isEmpty) {
+        _showError('Inquiry details unavailable');
+        return;
+      }
+
+      final now = DateTime.now();
+      if (_lastNavigatedInquiryId == id &&
+          _lastInquiryNavAt != null &&
+          now.difference(_lastInquiryNavAt!) < const Duration(seconds: 2)) {
+        debugPrint('📩 Skipping duplicate inquiry navigation for $id');
+        return;
+      }
+
+      final secureStorage = _ref.read(secureStorageServiceProvider);
+      final savedToken = await secureStorage.getBearerToken();
+      final pendingUri = Uri.parse('app://partnerinquirydetail/$id');
+
+      if (savedToken == null || savedToken.isEmpty) {
+        _pendingDeepLink = pendingUri;
+        debugPrint('📩 Inquiry queued until login: $id');
+        final currentRoute = _currentRouteName();
+        if (currentRoute != null &&
+            currentRoute != 'splash' &&
+            currentRoute != 'login' &&
+            currentRoute != 'otp') {
+          NavigationService.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            'login',
+            (route) => false,
+          );
+        }
+        return;
+      }
+
+      final isPartner = await secureStorage.getIsPartner();
+      if (!isPartner) {
+        _showError('This notification is for partner accounts only');
+        return;
+      }
+
+      final currentRoute = _currentRouteName();
+      if (NavigationService.navigatorKey.currentState == null ||
+          currentRoute == 'splash' ||
+          currentRoute == 'login' ||
+          currentRoute == 'otp' ||
+          currentRoute == 'profileSetup') {
+        _pendingDeepLink = pendingUri;
+        debugPrint(
+          '📩 Inquiry queued until navigation is ready (route=$currentRoute): $id',
+        );
+        return;
+      }
+
+      _lastNavigatedInquiryId = id;
+      _lastInquiryNavAt = now;
+
+      if (!fromDeepLink || currentRoute != 'navbar') {
+        NavigationService.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          'navbar',
+          (route) => false,
+        );
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      NavigationService.navigatorKey.currentState?.pushNamed(
+        'partnerInquiryDetail',
+        arguments: {'inquiryId': id},
+      );
+      debugPrint('✅ Navigated to Partner Inquiry Details: $id');
+    } catch (e) {
+      debugPrint('Error navigating to partner inquiry: $e');
+      _showError('Unable to open inquiry details');
+    }
+  }
+
+  String? _currentRouteName() {
+    final context = NavigationService.navigatorKey.currentContext;
+    if (context == null) return null;
+    return ModalRoute.of(context)?.settings.name;
+  }
+
   /// Main deep link handler - routes to appropriate screen
   Future<void> handleDeepLink(Uri uri) async {
     try {
@@ -307,11 +421,18 @@ class DeepLinkService {
           // field can pick it up instead of restarting the auth flow.
           return;
         }
+        // Preserve destination so NavBar can open it after partner/customer login.
+        _pendingDeepLink = uri;
         debugPrint(
-          'Authentication required for deep link. Redirecting to login.',
+          'Authentication required for deep link. Queued as pending: $uri',
         );
 
-        // Ensure navigator is ready
+        final currentRoute = _currentRouteName();
+        if (currentRoute == 'splash' || currentRoute == null) {
+          // Splash still restoring session — do not interrupt with login.
+          return;
+        }
+
         if (NavigationService.navigatorKey.currentState == null) {
           debugPrint('Navigator not ready, retrying...');
           await Future.delayed(const Duration(milliseconds: 500));
@@ -360,6 +481,12 @@ class DeepLinkService {
           break;
         case 'rewarddetail':
           await _navigateToReward(id);
+          break;
+        case 'partnerinquirydetail':
+        case 'partner-inquiry-detail':
+        case 'inquirydetail':
+        case 'inquiry':
+          await _navigateToPartnerInquiry(id, fromDeepLink: true);
           break;
         case 'notifications':
           await _navigateToNotifications();
@@ -568,6 +695,13 @@ class DeepLinkService {
         return id != null ? '$baseUrl/offerdetail/$id' : '$baseUrl/offerdetail';
       case 'rewarddetail':
         return id != null ? '$baseUrl/rewarddetail/$id' : '$baseUrl/rewarddetail';
+      case 'partnerinquirydetail':
+      case 'partner-inquiry-detail':
+      case 'inquirydetail':
+      case 'inquiry':
+        return id != null
+            ? '$baseUrl/partnerinquirydetail/$id'
+            : '$baseUrl/partnerinquirydetail';
       case 'notifications':
         return '$baseUrl/notifications';
       case 'profile':

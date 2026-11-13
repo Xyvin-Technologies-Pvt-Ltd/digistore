@@ -100,11 +100,30 @@ class NotificationService {
         );
         String? deepLink;
         String? screen = dataMap['screen'] ?? dataMap['actionScreen'];
-        String? id = dataMap['id'] ?? dataMap['actionTargetId'];
-        final actionType = (dataMap['actionType'] ?? '').toString().toLowerCase();
+        final actionType =
+            (dataMap['actionType'] ?? '').toString().toLowerCase();
+        final metadata = dataMap['metadata'];
+        String? metaCartId;
+        String? metaInquiryId;
+        if (metadata is Map) {
+          metaCartId = metadata['cartId']?.toString();
+          metaInquiryId = metadata['inquiryId']?.toString();
+        }
+        String? id = dataMap['actionTargetId']?.toString() ??
+            dataMap['targetId']?.toString() ??
+            metaInquiryId ??
+            metaCartId ??
+            dataMap['inquiryId']?.toString() ??
+            dataMap['cartId']?.toString() ??
+            dataMap['id']?.toString();
 
         if (screen != null) {
           deepLink = _deepLinkService.generateDeepLink(screen, id: id);
+        } else if (actionType == 'open_product_inquiry') {
+          deepLink = _deepLinkService.generateDeepLink(
+            'partnerinquirydetail',
+            id: id,
+          );
         } else if (actionType == 'open_offer') {
           deepLink = _deepLinkService.generateDeepLink('offerdetail', id: id);
         } else if (actionType == 'open_shop' || actionType == 'open_branch') {
