@@ -57,52 +57,59 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const UserModel();
 
+    final map = (json['user'] is Map<String, dynamic>)
+        ? json['user'] as Map<String, dynamic>
+        : json;
+
     return UserModel(
-      id: (json['id'] ?? json['_id'])?.toString(),
-      phone: json['phone']?.toString(),
-      name: NameCase.maybe(json['name']?.toString()),
-      email: json['email']?.toString(),
-      avatar: json['avatar']?.toString(),
+      id: SafeParser.pick(map, ['id', '_id'])?.toString(),
+      phone: SafeParser.pick(
+        map,
+        ['phone', 'mobile', 'phoneNumber', 'contactPhone'],
+      )?.toString(),
+      name: NameCase.maybe(map['name']?.toString()),
+      email: map['email']?.toString(),
+      avatar: map['avatar']?.toString(),
       location: SafeParser.parseObject(
-        json['location'],
+        map['location'],
         LocationModel.fromJson,
       ),
-      pointsBalance: json['pointsBalance'] as int?,
-      totalPointsEarned: json['totalPointsEarned'] as int?,
-      isActive: json['isActive'] as bool?,
-      lastLogin: json['lastLogin'] != null
-          ? DateTime.tryParse(json['lastLogin'])?.toLocal()
+      pointsBalance: map['pointsBalance'] as int?,
+      totalPointsEarned: map['totalPointsEarned'] as int?,
+      isActive: map['isActive'] as bool?,
+      lastLogin: map['lastLogin'] != null
+          ? DateTime.tryParse(map['lastLogin'])?.toLocal()
           : null,
-      referralCode: json['referralCode'] as String?,
-      referredBy: json['referredBy'] as String?,
-      referralRewardClaimed: json['referralRewardClaimed'] as bool?,
-      onboardingComplete: json['onboardingComplete'] as bool?,
-      tutorialCompleted: json['tutorialCompleted'] as bool?,
+      referralCode: map['referralCode'] as String?,
+      referredBy: map['referredBy'] as String?,
+      referralRewardClaimed: map['referralRewardClaimed'] as bool?,
+      onboardingComplete: map['onboardingComplete'] as bool?,
+      tutorialCompleted: map['tutorialCompleted'] as bool?,
       preferences: SafeParser.parseObject(
-        json['preferences'],
+        map['preferences'],
         PreferencesModel.fromJson,
       ),
       currentTier: SafeParser.parseObject(
-        json['currentTier'] ?? json['tier'],
+        map['currentTier'] ?? map['tier'],
         TierModel.fromJson,
       ),
       nextTier: SafeParser.parseObject(
-        json['nextTier'],
+        map['nextTier'],
         NextTierModel.fromJson,
       ),
-      progressToNextTier: json['progressToNextTier'] != null
-          ? (json['progressToNextTier'] as num).toDouble()
+      progressToNextTier: map['progressToNextTier'] != null
+          ? (map['progressToNextTier'] as num).toDouble()
           : null,
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'])?.toLocal()
+      createdAt: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt'])?.toLocal()
           : null,
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.tryParse(json['updatedAt'])?.toLocal()
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.tryParse(map['updatedAt'])?.toLocal()
           : null,
-      deletedAt: json['deletedAt'] != null
-          ? DateTime.tryParse(json['deletedAt'])?.toLocal()
+      deletedAt: map['deletedAt'] != null
+          ? DateTime.tryParse(map['deletedAt'])?.toLocal()
           : null,
-      devices: SafeParser.parseList(json['devices'], DeviceModel.fromJson),
+      devices: SafeParser.parseList(map['devices'], DeviceModel.fromJson),
     );
   }
 
@@ -186,6 +193,49 @@ class UserModel {
       devices: devices ?? this.devices,
     );
   }
+
+  UserModel mergeWith(UserModel? other) {
+    if (other == null) return this;
+    return UserModel(
+      id: (other.id != null && other.id!.isNotEmpty) ? other.id : id,
+      phone: (other.phone != null && other.phone!.isNotEmpty)
+          ? other.phone
+          : phone,
+      name: (other.name != null && other.name!.isNotEmpty)
+          ? other.name
+          : name,
+      email: (other.email != null && other.email!.isNotEmpty)
+          ? other.email
+          : email,
+      avatar: (other.avatar != null && other.avatar!.isNotEmpty)
+          ? other.avatar
+          : avatar,
+      location: (location != null)
+          ? location!.mergeWith(other.location)
+          : other.location,
+      pointsBalance: other.pointsBalance ?? pointsBalance,
+      totalPointsEarned: other.totalPointsEarned ?? totalPointsEarned,
+      isActive: other.isActive ?? isActive,
+      lastLogin: other.lastLogin ?? lastLogin,
+      referralCode:
+          (other.referralCode != null && other.referralCode!.isNotEmpty)
+              ? other.referralCode
+              : referralCode,
+      referredBy: other.referredBy ?? referredBy,
+      referralRewardClaimed:
+          other.referralRewardClaimed ?? referralRewardClaimed,
+      onboardingComplete: other.onboardingComplete ?? onboardingComplete,
+      tutorialCompleted: other.tutorialCompleted ?? tutorialCompleted,
+      preferences: other.preferences ?? preferences,
+      currentTier: other.currentTier ?? currentTier,
+      nextTier: other.nextTier ?? nextTier,
+      progressToNextTier: other.progressToNextTier ?? progressToNextTier,
+      createdAt: other.createdAt ?? createdAt,
+      updatedAt: other.updatedAt ?? updatedAt,
+      deletedAt: other.deletedAt ?? deletedAt,
+      devices: other.devices ?? devices,
+    );
+  }
 }
 
 class LocationModel {
@@ -194,6 +244,19 @@ class LocationModel {
   final CoordinatesModel? coordinates;
 
   const LocationModel({this.district, this.localBody, this.coordinates});
+
+  LocationModel mergeWith(LocationModel? other) {
+    if (other == null) return this;
+    return LocationModel(
+      district: (other.district != null && other.district!.isNotEmpty)
+          ? other.district
+          : district,
+      localBody: (other.localBody != null && other.localBody!.isNotEmpty)
+          ? other.localBody
+          : localBody,
+      coordinates: other.coordinates ?? coordinates,
+    );
+  }
 
   factory LocationModel.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const LocationModel();

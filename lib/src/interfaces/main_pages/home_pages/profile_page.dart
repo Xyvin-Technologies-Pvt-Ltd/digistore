@@ -246,7 +246,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'G';
     final phone = (user?.phone != null && user!.phone!.isNotEmpty)
         ? user.phone!
-        : '9998877766';
+        : '';
     final locationName =
         (user?.location?.localBody != null &&
             user!.location!.localBody!.isNotEmpty)

@@ -6,16 +6,36 @@ import 'api_provider.dart';
 
 class UserNotifier extends Notifier<UserModel?> {
   @override
-  UserModel? build() => null;
+  UserModel? build() {
+    _loadUser();
+    return null;
+  }
+
+  Future<void> _loadUser() async {
+    try {
+      final storage = ref.read(secureStorageServiceProvider);
+      final user = await storage.getUserData();
+      if (user != null && state == null) {
+        state = user;
+      }
+    } catch (_) {}
+  }
 
   Future<int?> getProfile() async {
     final api = ref.read(apiProvider);
     final response = await api.get('/profile', requireAuth: true);
 
     if (response.success && response.data != null) {
-      final userData = response.data!['data'];
+      final rawData = response.data!['data'];
+      final userData = (rawData is Map<String, dynamic> &&
+              rawData['user'] is Map<String, dynamic>)
+          ? rawData['user'] as Map<String, dynamic>
+          : (rawData is Map<String, dynamic> ? rawData : null);
+
       if (userData != null) {
-        final user = UserModel.fromJson(userData as Map<String, dynamic>);
+        final parsedUser = UserModel.fromJson(userData);
+        final user =
+            (state != null) ? state!.mergeWith(parsedUser) : parsedUser;
         state = user;
         await saveUser(user);
         return 200;
@@ -55,13 +75,30 @@ class UserNotifier extends Notifier<UserModel?> {
     final response = await api.put('/profile', payload, requireAuth: true);
 
     if (response.success && response.data != null) {
-      final userData = response.data!['data'];
+      final rawData = response.data!['data'];
+      final userData = (rawData is Map<String, dynamic> &&
+              rawData['user'] is Map<String, dynamic>)
+          ? rawData['user'] as Map<String, dynamic>
+          : (rawData is Map<String, dynamic> ? rawData : null);
+
+      final base = state ?? const UserModel();
       if (userData != null) {
-        final user = UserModel.fromJson(userData as Map<String, dynamic>);
-        await saveUser(user);
+        final parsedUser = UserModel.fromJson(userData);
+        final userToSave = base.mergeWith(parsedUser).copyWith(
+              name: (parsedUser.name != null && parsedUser.name!.isNotEmpty)
+                  ? parsedUser.name
+                  : NameCase.toTitleCase(name),
+              email: (parsedUser.email != null && parsedUser.email!.isNotEmpty)
+                  ? parsedUser.email
+                  : (email.isNotEmpty ? email : null),
+              onboardingComplete: onboardingComplete ??
+                  parsedUser.onboardingComplete ??
+                  base.onboardingComplete,
+            );
+        await saveUser(userToSave);
       } else if (state != null) {
         final updatedUser = state!.copyWith(
-          name: name,
+          name: NameCase.toTitleCase(name),
           email: email,
           onboardingComplete: onboardingComplete,
         );
@@ -87,20 +124,32 @@ class UserNotifier extends Notifier<UserModel?> {
     }, requireAuth: true);
 
     if (response.success && response.data != null) {
-      final userData = response.data!['data'];
+      final newLocation = LocationModel(
+        district: district,
+        localBody: localBody,
+        coordinates: CoordinatesModel(coordinates: [lng, lat]),
+      );
+
+      final rawData = response.data!['data'];
+      final userData = (rawData is Map<String, dynamic> &&
+              rawData['user'] is Map<String, dynamic>)
+          ? rawData['user'] as Map<String, dynamic>
+          : (rawData is Map<String, dynamic> ? rawData : null);
+
+      final base = state ?? const UserModel();
+      var userToSave = base.copyWith(location: newLocation);
+
       if (userData != null) {
-        final user = UserModel.fromJson(userData as Map<String, dynamic>);
-        await saveUser(user);
-      } else if (state != null) {
-        final updatedUser = state!.copyWith(
-          location: LocationModel(
-            district: district,
-            localBody: localBody,
-            coordinates: CoordinatesModel(coordinates: [lng, lat]),
-          ),
+        final parsed = UserModel.fromJson(userData);
+        userToSave = userToSave.mergeWith(parsed);
+        userToSave = userToSave.copyWith(
+          location: (userToSave.location != null)
+              ? userToSave.location!.mergeWith(newLocation)
+              : newLocation,
         );
-        await saveUser(updatedUser);
       }
+
+      await saveUser(userToSave);
       return true;
     }
     throw Exception(response.message ?? 'Failed to update location');

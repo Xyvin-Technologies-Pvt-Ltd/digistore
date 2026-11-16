@@ -5,6 +5,8 @@ import '../../../data/constants/color_constants.dart';
 import '../../../data/constants/style_constants.dart';
 import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/providers/user_provider.dart';
+import '../../../data/services/secure_storage_service.dart';
+import '../../../data/services/toast_service.dart';
 import '../../components/primary_button.dart';
 import '../../components/primary_text_field.dart';
 import '../../components/location_selection_bottom_sheet.dart';
@@ -28,6 +30,11 @@ class _MyAccountPageState extends ConsumerState<MyAccountPage> {
   String? _district;
   String? _localBody;
 
+  double? _initialLat;
+  double? _initialLng;
+  String? _initialDistrict;
+  String? _initialLocalBody;
+
   String? _nameError;
   String? _emailError;
   bool _isLoading = false;
@@ -45,6 +52,11 @@ class _MyAccountPageState extends ConsumerState<MyAccountPage> {
     _lat = user?.location?.coordinates?.lat;
     _lng = user?.location?.coordinates?.lng;
 
+    _initialDistrict = _district;
+    _initialLocalBody = _localBody;
+    _initialLat = _lat;
+    _initialLng = _lng;
+
     _locationController = TextEditingController(
       text: (_localBody != null && _localBody!.isNotEmpty)
           ? _localBody!.split(' ').first
@@ -52,6 +64,20 @@ class _MyAccountPageState extends ConsumerState<MyAccountPage> {
           ? _district!.split(' ').first
           : '',
     );
+
+    if (_mobileController.text.isEmpty) {
+      ref.read(secureStorageServiceProvider).getRegistrationData().then((data) {
+        final phone = data?['phone'] as String?;
+        if (phone != null &&
+            phone.isNotEmpty &&
+            mounted &&
+            _mobileController.text.isEmpty) {
+          setState(() {
+            _mobileController.text = phone;
+          });
+        }
+      });
+    }
   }
 
   @override
@@ -124,6 +150,12 @@ class _MyAccountPageState extends ConsumerState<MyAccountPage> {
   Widget build(BuildContext context) {
     final screenSize = ref.watch(screenSizeProvider);
     final isEditMode = widget.isEditMode;
+    final user = ref.watch(userProvider);
+    if (_mobileController.text.isEmpty &&
+        user?.phone != null &&
+        user!.phone!.isNotEmpty) {
+      _mobileController.text = user.phone!;
+    }
 
     return Scaffold(
       backgroundColor: kWhite,
@@ -300,7 +332,13 @@ class _MyAccountPageState extends ConsumerState<MyAccountPage> {
                             email: cleanedEmail,
                           );
 
-                      if (success && _lat != null && _lng != null) {
+                      final bool locationChanged = (_lat != null && _lng != null) &&
+                          (_lat != _initialLat ||
+                              _lng != _initialLng ||
+                              _district != _initialDistrict ||
+                              _localBody != _initialLocalBody);
+
+                      if (success && locationChanged) {
                         await ref
                             .read(userProvider.notifier)
                             .updateLocation(
@@ -313,6 +351,16 @@ class _MyAccountPageState extends ConsumerState<MyAccountPage> {
 
                       if (success && context.mounted) {
                         Navigator.pop(context);
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        final errorMsg =
+                            e.toString().replaceAll('Exception: ', '');
+                        ToastService().showToast(
+                          context,
+                          errorMsg,
+                          type: ToastType.error,
+                        );
                       }
                     } finally {
                       if (mounted) {
