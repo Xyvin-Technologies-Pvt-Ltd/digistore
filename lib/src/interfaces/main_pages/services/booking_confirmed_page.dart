@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/providers/screen_size_provider.dart';
+import '../../../data/services/spin_unlock_helper.dart';
 import 'my_bookings_page.dart';
 
 class BookingConfirmedPage extends ConsumerWidget {
@@ -97,6 +98,7 @@ class BookingConfirmedPage extends ConsumerWidget {
         body: SafeArea(
           child: Column(
             children: [
+              _BookingSpinProbe(transactionId: booking.id),
               Expanded(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.symmetric(
@@ -377,4 +379,32 @@ class BookingConfirmedPage extends ConsumerWidget {
       ],
     );
   }
+}
+
+class _BookingSpinProbe extends ConsumerStatefulWidget {
+  final String transactionId;
+
+  const _BookingSpinProbe({required this.transactionId});
+
+  @override
+  ConsumerState<_BookingSpinProbe> createState() => _BookingSpinProbeState();
+}
+
+class _BookingSpinProbeState extends ConsumerState<_BookingSpinProbe> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.transactionId.isEmpty) return;
+      openSpinIfAvailable(
+        context,
+        transactionId: widget.transactionId,
+        ref: ref,
+        probeStatus: true,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

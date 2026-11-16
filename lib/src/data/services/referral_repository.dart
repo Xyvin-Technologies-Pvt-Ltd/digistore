@@ -71,7 +71,6 @@ class ReferralRepository {
         'deviceId': deviceId,
       },
       requireAuth: true,
-      headers: {'x-device-id': deviceId},
     );
     final body = response.data;
     final message =

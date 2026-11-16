@@ -123,10 +123,27 @@ class SecureStorageService {
     return null;
   }
 
-  /// Clear all stored tokens and user data
-  /// Called on logout
+  /// Clear session tokens and user data on logout.
+  ///
+  /// Intentionally does **not** call [FlutterSecureStorage.deleteAll] and does
+  /// **not** delete [DeviceIdService.storageKey] (`permanent_device_id`) — that
+  /// ID must survive logout/login and is owned by [DeviceIdService].
   Future<void> clearAll() async {
-    await _storage.deleteAll();
+    await Future.wait([
+      _storage.delete(key: _bearerTokenKey),
+      _storage.delete(key: _userIdKey),
+      _storage.delete(key: _userDataKey),
+      _storage.delete(key: _fcmTokenKey),
+      _storage.delete(key: _preferredLanguageKey),
+      _storage.delete(key: _onboardingCompleteKey),
+      _storage.delete(key: _tutorialCompletedKey),
+      _storage.delete(key: _isPartnerKey),
+      _storage.delete(key: _partnerDataKey),
+      _storage.delete(key: 'has_prompted_for_notifications'),
+      _storage.delete(key: 'registration_data'),
+      _storage.delete(key: _resourceSwipeTutorialKey),
+      _storage.delete(key: _doubleTapLikeTutorialKey),
+    ]);
   }
 
   /// Check if bearer token exists

@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:setgo/src/data/models/referral_models.dart';
 import 'package:setgo/src/data/providers/api_provider.dart';
 import 'package:setgo/src/data/providers/referral_provider.dart';
+import 'package:setgo/src/data/services/device_id_service.dart';
 import 'package:setgo/src/data/services/referral_attribution.dart';
 import 'package:setgo/src/data/services/referral_repository.dart';
 import 'package:setgo/src/data/services/referral_store.dart';
@@ -171,15 +172,19 @@ void main() {
 
     setUp(() {
       client = RecordingClient();
+      final deviceIds = DeviceIdService(
+        storage: const FlutterSecureStorage(),
+      );
       repo = ReferralRepository(
         ApiProvider(
           baseUrl: 'https://example.test/api/mobile',
           secureStorage: SecureStorageService(
             storage: const FlutterSecureStorage(),
           ),
+          deviceIdService: deviceIds,
           client: client,
         ),
-        ReferralStore(),
+        ReferralStore(deviceIdService: deviceIds),
       );
     });
 

@@ -8,6 +8,7 @@ import 'package:setgo/src/data/services/secure_storage_service.dart';
 import 'package:setgo/src/data/services/snackbar_service.dart';
 import 'package:setgo/src/data/services/notification_service/notification_controller.dart';
 import 'package:setgo/src/data/providers/offers_provider.dart';
+import 'package:setgo/src/data/providers/partner_inquiries_provider.dart';
 import 'package:setgo/src/data/providers/shops_provider.dart';
 import 'package:setgo/src/data/providers/rewards_provider.dart';
 import 'package:setgo/src/data/utils/launch_url.dart';
@@ -22,8 +23,7 @@ class DeepLinkService {
   final Ref _ref;
   final _appLinks = AppLinks();
   Uri? _pendingDeepLink;
-  String? _lastNavigatedInquiryId;
-  DateTime? _lastInquiryNavAt;
+  DateTime? _lastInquiryListNavAt;
 
   DeepLinkService(this._ref);
 
@@ -155,12 +155,13 @@ class DeepLinkService {
             await _navigateToBookings();
             return;
           case 'open_product_inquiry':
+            // Always open Partner Enquiry Listing (not individual detail).
             final inquiryId =
                 action.targetId ??
                 meta('inquiryId') ??
                 meta('cartId') ??
                 meta('id');
-            await _navigateToPartnerInquiry(inquiryId);
+            await _navigateToPartnerInquiryListing(highlightInquiryId: inquiryId);
             return;
           default:
             break;
@@ -175,13 +176,14 @@ class DeepLinkService {
           meta('inquiryId') ?? meta('cartId') ?? action?.targetId;
       final url = meta('url') ?? action?.url;
       final kind = (meta('kind') ?? notification.type ?? '').toLowerCase();
+      final screenHint =
+          (action?.screen ?? meta('screen') ?? '').toLowerCase();
 
-      if (inquiryId != null &&
-          inquiryId.isNotEmpty &&
-          (kind.contains('inquiry') ||
-              kind.contains('cart') ||
-              action?.type == 'open_product_inquiry')) {
-        await _navigateToPartnerInquiry(inquiryId);
+      if (kind.contains('inquiry') ||
+          kind.contains('cart') ||
+          action?.type == 'open_product_inquiry' ||
+          screenHint.contains('inquir')) {
+        await _navigateToPartnerInquiryListing(highlightInquiryId: inquiryId);
       } else if (offerId != null && offerId.isNotEmpty) {
         await _navigateToOffer(offerId);
       } else if (shopId != null && shopId.isNotEmpty) {
@@ -196,8 +198,6 @@ class DeepLinkService {
         await _openMainTab('Shops');
       } else if (kind.contains('reward')) {
         await _openMainTab('Rewards');
-      } else if (kind.contains('inquiry') || kind.contains('cart')) {
-        await _navigateToPartnerInquiry(inquiryId);
       } else {
         debugPrint('📩 No navigable action on notification ${notification.id}');
       }
@@ -234,6 +234,12 @@ class DeepLinkService {
       case 'services':
       case 'products & services':
         await _openMainTab('Products & Services');
+        break;
+      case 'partnerinquiries':
+      case 'partner-inquiries':
+      case 'inquiries':
+      case 'enquiries':
+        await _navigateToPartnerInquiryListing();
         break;
       case 'home':
       case 'general':
@@ -291,36 +297,40 @@ class DeepLinkService {
     await _openMainTab('Products & Services');
   }
 
-  /// Partner-only: open inquiry details for notification / deep link.
+  /// Partner-only: open enquiry listing for notification / deep link.
   ///
-  /// Backend contract: notification `action.targetId` (or `metadata.cartId`)
-  /// is the inquiry id accepted by `GET /mobile/partner/inquiries/:id`.
-  Future<void> _navigateToPartnerInquiry(
-    String? inquiryId, {
+  /// Backend contract: `open_product_inquiry` with optional `action.targetId`
+  /// / `metadata.cartId`. Always opens the listing (`GET /inquiries`), never
+  /// the individual detail route. Optional [highlightInquiryId] soft-highlights
+  /// a row when present.
+  Future<void> _navigateToPartnerInquiryListing({
+    String? highlightInquiryId,
     bool fromDeepLink = false,
   }) async {
     try {
-      final id = inquiryId?.trim() ?? '';
-      if (id.isEmpty) {
-        _showError('Inquiry details unavailable');
-        return;
-      }
-
+      final highlight = highlightInquiryId?.trim() ?? '';
       final now = DateTime.now();
-      if (_lastNavigatedInquiryId == id &&
-          _lastInquiryNavAt != null &&
-          now.difference(_lastInquiryNavAt!) < const Duration(seconds: 2)) {
-        debugPrint('📩 Skipping duplicate inquiry navigation for $id');
+      if (_lastInquiryListNavAt != null &&
+          now.difference(_lastInquiryListNavAt!) < const Duration(seconds: 2)) {
+        // Rapid taps: refresh listing in place instead of stacking routes.
+        debugPrint('📩 Debounced inquiry listing nav — refreshing');
+        try {
+          final notifier = _ref.read(partnerInquiriesProvider.notifier);
+          if (highlight.isNotEmpty) notifier.setHighlightId(highlight);
+          await notifier.refresh();
+        } catch (_) {}
         return;
       }
 
       final secureStorage = _ref.read(secureStorageServiceProvider);
       final savedToken = await secureStorage.getBearerToken();
-      final pendingUri = Uri.parse('app://partnerinquirydetail/$id');
+      final pendingUri = highlight.isNotEmpty
+          ? Uri.parse('app://partnerInquiries/$highlight')
+          : Uri.parse('app://partnerInquiries');
 
       if (savedToken == null || savedToken.isEmpty) {
         _pendingDeepLink = pendingUri;
-        debugPrint('📩 Inquiry queued until login: $id');
+        debugPrint('📩 Inquiry listing queued until login');
         final currentRoute = _currentRouteName();
         if (currentRoute != null &&
             currentRoute != 'splash' &&
@@ -348,13 +358,90 @@ class DeepLinkService {
           currentRoute == 'profileSetup') {
         _pendingDeepLink = pendingUri;
         debugPrint(
-          '📩 Inquiry queued until navigation is ready (route=$currentRoute): $id',
+          '📩 Inquiry listing queued until navigation is ready (route=$currentRoute)',
         );
         return;
       }
 
-      _lastNavigatedInquiryId = id;
-      _lastInquiryNavAt = now;
+      _lastInquiryListNavAt = now;
+
+      final alreadyOnListing = _isPartnerInquiriesRoute(currentRoute);
+      if (alreadyOnListing) {
+        try {
+          final notifier = _ref.read(partnerInquiriesProvider.notifier);
+          if (highlight.isNotEmpty) notifier.setHighlightId(highlight);
+          await notifier.refresh();
+          debugPrint('✅ Refreshed Partner Inquiry Listing in place');
+        } catch (e) {
+          debugPrint('Inquiry listing refresh failed: $e');
+        }
+        return;
+      }
+
+      if (!fromDeepLink || currentRoute != 'navbar') {
+        NavigationService.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          'navbar',
+          (route) => false,
+        );
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      try {
+        final notifier = _ref.read(partnerInquiriesProvider.notifier);
+        if (highlight.isNotEmpty) notifier.setHighlightId(highlight);
+        // Kick off refresh; page also fetches on init.
+        notifier.refresh();
+      } catch (_) {}
+
+      NavigationService.navigatorKey.currentState?.pushNamed(
+        'partnerInquiries',
+        arguments: highlight.isNotEmpty
+            ? {'highlightInquiryId': highlight}
+            : null,
+      );
+      debugPrint('✅ Navigated to Partner Inquiry Listing');
+    } catch (e) {
+      debugPrint('Error navigating to partner inquiry listing: $e');
+      _showError('Unable to open enquiries');
+    }
+  }
+
+  /// Explicit detail deep link (e.g. shared URL). Not used for notifications.
+  Future<void> _navigateToPartnerInquiryDetail(
+    String? inquiryId, {
+    bool fromDeepLink = false,
+  }) async {
+    try {
+      final id = inquiryId?.trim() ?? '';
+      if (id.isEmpty) {
+        await _navigateToPartnerInquiryListing(fromDeepLink: fromDeepLink);
+        return;
+      }
+
+      final secureStorage = _ref.read(secureStorageServiceProvider);
+      final savedToken = await secureStorage.getBearerToken();
+      final pendingUri = Uri.parse('app://partnerinquirydetail/$id');
+
+      if (savedToken == null || savedToken.isEmpty) {
+        _pendingDeepLink = pendingUri;
+        return;
+      }
+
+      final isPartner = await secureStorage.getIsPartner();
+      if (!isPartner) {
+        _showError('This notification is for partner accounts only');
+        return;
+      }
+
+      final currentRoute = _currentRouteName();
+      if (NavigationService.navigatorKey.currentState == null ||
+          currentRoute == 'splash' ||
+          currentRoute == 'login' ||
+          currentRoute == 'otp' ||
+          currentRoute == 'profileSetup') {
+        _pendingDeepLink = pendingUri;
+        return;
+      }
 
       if (!fromDeepLink || currentRoute != 'navbar') {
         NavigationService.navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -368,11 +455,16 @@ class DeepLinkService {
         'partnerInquiryDetail',
         arguments: {'inquiryId': id},
       );
-      debugPrint('✅ Navigated to Partner Inquiry Details: $id');
     } catch (e) {
-      debugPrint('Error navigating to partner inquiry: $e');
+      debugPrint('Error navigating to partner inquiry detail: $e');
       _showError('Unable to open inquiry details');
     }
+  }
+
+  bool _isPartnerInquiriesRoute(String? routeName) {
+    if (routeName == null) return false;
+    final key = routeName.toLowerCase().replaceAll('-', '');
+    return key == 'partnerinquiries';
   }
 
   String? _currentRouteName() {
@@ -399,12 +491,18 @@ class DeepLinkService {
         return;
       }
 
-      // Filter out empty segments and 'app' prefix
+      // Filter out empty segments and 'app' prefix.
+      // For custom schemes like `app://partnerInquiries/id`, the route lives in
+      // [uri.host] and the id in pathSegments — merge them so routing works.
       var pathSegments = uri.pathSegments
           .where((segment) => segment.isNotEmpty)
           .toList();
 
-      // Remove 'app' prefix if present
+      if (uri.scheme == 'app' && uri.host.isNotEmpty) {
+        pathSegments = [uri.host, ...pathSegments];
+      }
+
+      // Remove 'app' prefix if present (https://host/app/...)
       if (pathSegments.isNotEmpty && pathSegments[0] == 'app') {
         pathSegments = pathSegments.sublist(1);
       }
@@ -482,11 +580,28 @@ class DeepLinkService {
         case 'rewarddetail':
           await _navigateToReward(id);
           break;
+        case 'partnerinquiries':
+        case 'partner-inquiries':
+        case 'inquiries':
+        case 'enquiries':
+          // Notification / listing deep links — always open listing.
+          await _navigateToPartnerInquiryListing(
+            highlightInquiryId: id,
+            fromDeepLink: true,
+          );
+          break;
         case 'partnerinquirydetail':
         case 'partner-inquiry-detail':
         case 'inquirydetail':
+          // Explicit detail URLs only (not used for open_product_inquiry).
+          await _navigateToPartnerInquiryDetail(id, fromDeepLink: true);
+          break;
         case 'inquiry':
-          await _navigateToPartnerInquiry(id, fromDeepLink: true);
+          // Ambiguous short path → listing (notification-safe default).
+          await _navigateToPartnerInquiryListing(
+            highlightInquiryId: id,
+            fromDeepLink: true,
+          );
           break;
         case 'notifications':
           await _navigateToNotifications();
@@ -695,10 +810,17 @@ class DeepLinkService {
         return id != null ? '$baseUrl/offerdetail/$id' : '$baseUrl/offerdetail';
       case 'rewarddetail':
         return id != null ? '$baseUrl/rewarddetail/$id' : '$baseUrl/rewarddetail';
+      case 'partnerinquiries':
+      case 'partner-inquiries':
+      case 'inquiries':
+      case 'enquiries':
+      case 'inquiry':
+        return id != null && id.isNotEmpty
+            ? '$baseUrl/partnerInquiries/$id'
+            : '$baseUrl/partnerInquiries';
       case 'partnerinquirydetail':
       case 'partner-inquiry-detail':
       case 'inquirydetail':
-      case 'inquiry':
         return id != null
             ? '$baseUrl/partnerinquirydetail/$id'
             : '$baseUrl/partnerinquirydetail';

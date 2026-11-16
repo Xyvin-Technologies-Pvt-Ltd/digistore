@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/device_id_service.dart';
 import '../services/referral_attribution.dart';
 import '../services/referral_repository.dart';
 import '../services/referral_store.dart';
@@ -7,7 +8,7 @@ import '../services/secure_storage_service.dart';
 import 'api_provider.dart';
 
 final referralStoreProvider = Provider<ReferralStore>((ref) {
-  return ReferralStore();
+  return ReferralStore(deviceIdService: ref.watch(deviceIdServiceProvider));
 });
 
 final referralRepositoryProvider = Provider<ReferralRepository>((ref) {

@@ -6,7 +6,7 @@ import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:setgo/src/data/providers/api_provider.dart';
-import 'package:setgo/src/data/services/referral_store.dart';
+import 'package:setgo/src/data/services/device_id_service.dart';
 import 'package:setgo/src/data/services/secure_storage_service.dart';
 import 'package:setgo/src/data/services/voucher_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -57,17 +57,23 @@ void main() {
       secureData,
     );
     client = _RecordingClient();
+    final deviceIds = DeviceIdService(
+      storage: const FlutterSecureStorage(),
+    );
     repo = VoucherRepository(
       ApiProvider(
         baseUrl: 'https://example.test/api/mobile',
         secureStorage: SecureStorageService(
           storage: const FlutterSecureStorage(),
         ),
+        deviceIdService: deviceIds,
         client: client,
       ),
-      ReferralStore(),
     );
   });
+
+  String? deviceHeader(http.Request request) =>
+      request.headers['x-device-id'] ?? request.headers['X-Device-Id'];
 
   test('myVouchers parses active list and sends device header', () async {
     client.enqueue(200, {
@@ -83,6 +89,8 @@ void main() {
           'status': 'active',
           'daysLeft': 14,
           'isExpired': false,
+          'applicableCategories': ['Beauty Parlour'],
+          'icon': '🎁',
         },
       ],
     });
@@ -91,10 +99,12 @@ void main() {
     expect(list, hasLength(1));
     expect(list.first.voucherCode, 'WELCOME-7A2F8B');
     expect(list.first.valueLabel, '₹50 Off');
+    expect(list.first.applicableCategories, ['Beauty Parlour']);
+    expect(list.first.icon, '🎁');
     expect(client.requests.single.method, 'GET');
     expect(client.requests.single.url.path, endsWith('/vouchers/my-vouchers'));
     expect(client.requests.single.url.queryParameters['status'], 'active');
-    expect(client.requests.single.headers['x-device-id'], isNotEmpty);
+    expect(deviceHeader(client.requests.single), isNotEmpty);
     expect(client.requests.single.headers['authorization'], 'Bearer tok');
   });
 
@@ -104,7 +114,7 @@ void main() {
       'message': 'Voucher applied: ₹50 discount!',
       'data': {
         'valid': true,
-        'discountAmount': 50,
+        'discount': 50,
         'finalAmount': 400,
         'message': 'Voucher applied: ₹50 discount!',
         'voucher': {
@@ -127,12 +137,14 @@ void main() {
     );
     expect(ok.valid, isTrue);
     expect(ok.discountAmount, 50);
+    expect(ok.discount, 50);
     expect(ok.finalAmount, 400);
     final body =
         jsonDecode(client.requests.single.body) as Map<String, dynamic>;
     expect(body['voucherCode'], 'WELCOME-7A2F8B');
     expect(body['cartAmount'], 450);
-    expect(client.requests.single.headers['x-device-id'], isNotEmpty);
+    expect(body['categories'], ['Beauty Parlour']);
+    expect(deviceHeader(client.requests.single), isNotEmpty);
 
     client.enqueue(400, {
       'success': false,
@@ -143,4 +155,50 @@ void main() {
     expect(bad.message, contains('Minimum purchase'));
   });
 
+  test('spinStatus and executeSpin hit voucher spin paths', () async {
+    client.enqueue(200, {
+      'success': true,
+      'data': {
+        'hasSpinAvailable': true,
+        'campaignId': 'c1',
+        'campaignTitle': 'Lucky Spin',
+        'segments': [
+          {'index': 0, 'label': '₹50', 'rewardType': 'flat_voucher', 'value': 50},
+          {
+            'index': 1,
+            'label': 'Grand',
+            'rewardType': 'flat_voucher',
+            'value': 500,
+            'isGrandPrize': true,
+          },
+        ],
+      },
+    });
+    final status = await repo.spinStatus('tx1');
+    expect(status.hasSpinAvailable, isTrue);
+    expect(status.campaignId, 'c1');
+    expect(status.segments, hasLength(2));
+    expect(client.requests.single.url.path, endsWith('/vouchers/spin-status/tx1'));
+    expect(deviceHeader(client.requests.single), isNotEmpty);
+
+    client.enqueue(200, {
+      'success': true,
+      'data': {
+        'winningSegmentIndex': 1,
+        'prizeType': 'flat_voucher',
+        'voucherCode': 'SPIN-9X',
+        'label': 'Grand',
+        'isGrandPrize': true,
+        'message': 'You won!',
+      },
+    });
+    final result = await repo.executeSpin(
+      campaignId: 'c1',
+      transactionId: 'tx1',
+    );
+    expect(result.winningSegmentIndex, 1);
+    expect(result.voucherCode, 'SPIN-9X');
+    expect(client.requests.last.method, 'POST');
+    expect(client.requests.last.url.path, endsWith('/vouchers/spin/c1'));
+  });
 }

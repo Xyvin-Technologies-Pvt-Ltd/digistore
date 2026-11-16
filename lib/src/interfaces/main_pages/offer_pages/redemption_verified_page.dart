@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/constants/style_constants.dart';
 import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/providers/user_provider.dart';
+import '../../../data/services/spin_unlock_helper.dart';
 import '../../components/primary_button.dart';
 
 class RedemptionVerifiedPage extends ConsumerStatefulWidget {
@@ -43,7 +44,32 @@ class _RedemptionVerifiedPageState
     // Refresh profile in background to get latest balance & tier
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(userProvider.notifier).getProfile();
+      _maybeOpenSpin();
     });
+  }
+
+  Future<void> _maybeOpenSpin() async {
+    final rawArgs = widget.args ?? <String, dynamic>{};
+    final redemptionData = (rawArgs['redemption'] is Map)
+        ? Map<String, dynamic>.from(rawArgs['redemption'] as Map)
+        : <String, dynamic>{};
+    final spinUnlocked = extractSpinUnlock(rawArgs) ??
+        extractSpinUnlock(redemptionData);
+    final txId = spinUnlocked?.transactionId ??
+        rawArgs['transactionId']?.toString() ??
+        extractTransactionId(redemptionData) ??
+        extractTransactionId(rawArgs);
+
+    if (!mounted) return;
+    await openSpinIfAvailable(
+      context,
+      spinUnlocked: spinUnlocked,
+      transactionId: txId,
+      campaignId: spinUnlocked?.campaignId,
+      ref: ref,
+      // When unlock payload is absent, ask the API before navigating.
+      probeStatus: spinUnlocked == null,
+    );
   }
 
   @override

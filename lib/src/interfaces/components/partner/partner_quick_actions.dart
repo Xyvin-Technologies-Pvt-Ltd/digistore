@@ -50,6 +50,18 @@ class PartnerQuickActions extends ConsumerWidget {
               Expanded(
                 child: _actionCard(
                   context,
+                  title: 'Bulk OTP',
+                  bgColor: const Color(0xFFE8F0FF),
+                  imageAsset: 'assets/png/quick_action_verify_otp.png',
+                  onTap: () {
+                    Navigator.pushNamed(context, 'partnerBulkVerify');
+                  },
+                ),
+              ),
+              SizedBox(width: screenSize.responsivePadding(8)),
+              Expanded(
+                child: _actionCard(
+                  context,
                   title: 'Create Offer',
                   bgColor: const Color(0xFFF3E8FF),
                   imageAsset: 'assets/png/quick_action_create_offer.png',
@@ -67,18 +79,6 @@ class PartnerQuickActions extends ConsumerWidget {
                   imageAsset: 'assets/png/quick_action_create_product.png',
                   onTap: () {
                     Navigator.pushNamed(context, 'createProduct');
-                  },
-                ),
-              ),
-              SizedBox(width: screenSize.responsivePadding(8)),
-              Expanded(
-                child: _actionCard(
-                  context,
-                  title: 'Sales Calculator',
-                  bgColor: const Color(0xFFE0F2FE),
-                  imageAsset: 'assets/png/quick_action_sales_calculator.png',
-                  onTap: () {
-                    Navigator.pushNamed(context, 'salesCalculator');
                   },
                 ),
               ),

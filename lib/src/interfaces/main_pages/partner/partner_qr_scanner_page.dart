@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../data/constants/color_constants.dart';
 import '../../../data/constants/style_constants.dart';
+import '../../../data/providers/bulk_redemption_provider.dart';
 import '../../../data/providers/offers_provider.dart';
 import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/services/toast_service.dart';
@@ -113,6 +114,99 @@ class _PartnerQrScannerPageState extends ConsumerState<PartnerQrScannerPage> {
     }
   }
 
+  Map<String, dynamic>? _tryDecodeJsonMap(String raw) {
+    try {
+      final trimmed = raw.trim();
+      if (!trimmed.startsWith('{')) return null;
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _completeBulkScan({
+    required String batchId,
+    required String qrToken,
+  }) async {
+    if (batchId.isEmpty) {
+      await _handleScanError('Bulk QR is missing batch id.');
+      return;
+    }
+    if (!mounted) return;
+
+    final saleAmount = await _promptSaleAmount();
+    if (!mounted) return;
+    if (saleAmount == null) {
+      await _resumeScanning();
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: kPrimaryColor)),
+    );
+
+    try {
+      final result = await ref
+          .read(bulkRedemptionRepositoryProvider)
+          .partnerScanBulkQr(
+            batchId: batchId,
+            qrToken: qrToken,
+            saleAmount: saleAmount,
+          );
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      ToastService().showToast(
+        context,
+        result.message ??
+            'Bulk redemption successful (${result.offersCount} offers)',
+        type: ToastType.success,
+      );
+
+      Navigator.of(context).pushReplacementNamed(
+        'partnerRedemptionSuccess',
+        arguments: {
+          'redemption': {
+            'redemptionId': result.batchId ?? batchId,
+            'offersCount': result.offersCount,
+            'totalDiscount': result.totalDiscount,
+            'totalPointsEarned': result.totalPointsEarned,
+            'status': result.status,
+            if (result.spinUnlocked != null)
+              'spinUnlocked': {
+                'hasSpinAvailable': result.spinUnlocked!.hasSpinAvailable,
+                'transactionId': result.spinUnlocked!.transactionId,
+                'campaignId': result.spinUnlocked!.campaignId,
+              },
+          },
+          'offer': {
+            'title': 'Bulk redemption',
+            'subtitle': '${result.offersCount} offers completed',
+          },
+        },
+      );
+
+      if (mounted && result.spinUnlocked?.hasSpinAvailable == true) {
+        ToastService().showToast(
+          context,
+          'Customer unlocked a Spin & Win chance',
+          type: ToastType.success,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      await _handleScanError(e.toString());
+    }
+  }
+
   /// Decode JWT payload without verification (server verifies signature).
   Map<String, dynamic>? _decodeJwtPayload(String token) {
     try {
@@ -144,10 +238,25 @@ class _PartnerQrScannerPageState extends ConsumerState<PartnerQrScannerPage> {
       await _controller!.stop();
     } catch (_) {}
 
-    final payload = _decodeJwtPayload(raw);
+    // Plain JSON bulk QR: { "type": "bulk_redemption", "batchId": "..." }
+    Map<String, dynamic>? payload = _tryDecodeJsonMap(raw);
+    payload ??= _decodeJwtPayload(raw);
     if (payload == null) {
       await _handleScanError(
         'Invalid QR code. Ask the customer to generate a new one.',
+      );
+      return;
+    }
+
+    final type = (payload['type'] ?? '').toString().toLowerCase();
+    final batchId = (payload['batchId'] ?? payload['batch_id'])?.toString();
+    if (type == 'bulk_redemption' ||
+        (batchId != null &&
+            batchId.isNotEmpty &&
+            payload['redemptionId'] == null)) {
+      await _completeBulkScan(
+        batchId: batchId ?? '',
+        qrToken: raw.trim(),
       );
       return;
     }

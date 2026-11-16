@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flutter/foundation.dart';
+import '../services/device_id_service.dart';
 import '../services/secure_storage_service.dart';
 import '../services/connectivity_service.dart';
 import 'user_type_provider.dart';
@@ -112,11 +113,13 @@ class ApiResponse<T> {
 class ApiProvider {
   final String baseUrl;
   final SecureStorageService secureStorage;
+  final DeviceIdService? deviceIdService;
   final http.Client _client;
 
   ApiProvider({
     required this.baseUrl,
     required this.secureStorage,
+    this.deviceIdService,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
@@ -128,6 +131,12 @@ class ApiProvider {
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }
+    }
+
+    // Permanent device ID on every request (auth + public). Logout must not wipe it.
+    final deviceIds = deviceIdService;
+    if (deviceIds != null) {
+      headers['X-Device-Id'] = await deviceIds.getPermanentDeviceId();
     }
 
     return headers;
@@ -316,8 +325,18 @@ class ApiProvider {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return ApiResponse.success(decoded, response.statusCode);
       } else {
-        final message = decoded['message'] ?? 'Failed to put data';
-        return ApiResponse.error(message, response.statusCode);
+        final message = decoded is Map
+            ? (decoded['message'] ?? 'Failed to put data')
+            : 'Failed to put data';
+        return ApiResponse.error(
+          message.toString(),
+          response.statusCode,
+          decoded is Map<String, dynamic>
+              ? decoded
+              : decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : null,
+        );
       }
     } catch (e, stackTrace) {
       await CrashlyticsService.logError(e, stackTrace);
@@ -404,8 +423,18 @@ class ApiProvider {
           streamedResponse.statusCode < 300) {
         return ApiResponse.success(decoded, streamedResponse.statusCode);
       } else {
-        final message = decoded['message'] ?? 'Failed to post multipart data';
-        return ApiResponse.error(message, streamedResponse.statusCode);
+        final message = decoded is Map
+            ? (decoded['message'] ?? 'Failed to post multipart data')
+            : 'Failed to post multipart data';
+        return ApiResponse.error(
+          message.toString(),
+          streamedResponse.statusCode,
+          decoded is Map<String, dynamic>
+              ? decoded
+              : decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : null,
+        );
       }
     } catch (e, stackTrace) {
       await CrashlyticsService.logError(e, stackTrace);
@@ -448,9 +477,14 @@ class ApiProvider {
 
 final publicApiProvider = Provider<ApiProvider>((ref) {
   final secureStorage = ref.watch(secureStorageServiceProvider);
+  final deviceIdService = ref.watch(deviceIdServiceProvider);
   const baseUrl = String.fromEnvironment('BASE_URL', defaultValue: '');
 
-  return ApiProvider(baseUrl: baseUrl, secureStorage: secureStorage);
+  return ApiProvider(
+    baseUrl: baseUrl,
+    secureStorage: secureStorage,
+    deviceIdService: deviceIdService,
+  );
 });
 
 final apiProvider = Provider<ApiProvider>((ref) {
@@ -467,5 +501,9 @@ final apiProvider = Provider<ApiProvider>((ref) {
     }
   }
 
-  return ApiProvider(baseUrl: baseUrl, secureStorage: publicApi.secureStorage);
+  return ApiProvider(
+    baseUrl: baseUrl,
+    secureStorage: publicApi.secureStorage,
+    deviceIdService: publicApi.deviceIdService,
+  );
 });

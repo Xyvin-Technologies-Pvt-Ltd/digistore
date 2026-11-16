@@ -324,6 +324,13 @@ class _PartnerProfilePageState extends ConsumerState<PartnerProfilePage>
               ),
               _settingsGap(),
               PartnerMenuItem(
+                title: 'Enquiries',
+                icon: _menuIcon(Icons.shopping_bag_outlined),
+                screenSize: screenSize,
+                onTap: () => Navigator.pushNamed(context, 'partnerInquiries'),
+              ),
+              _settingsGap(),
+              PartnerMenuItem(
                 title: 'Plan Details',
                 icon: _menuIcon(Icons.card_membership_outlined),
                 screenSize: screenSize,

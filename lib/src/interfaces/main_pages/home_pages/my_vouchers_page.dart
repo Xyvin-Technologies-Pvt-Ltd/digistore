@@ -218,17 +218,34 @@ class _VoucherCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    voucher.valueLabel,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: kPrimaryColor,
-                      height: 1.2,
+                  if (voucher.icon != null && voucher.icon!.isNotEmpty)
+                    Text(voucher.icon!, style: const TextStyle(fontSize: 22))
+                  else
+                    Text(
+                      voucher.valueLabel,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: kPrimaryColor,
+                        height: 1.2,
+                      ),
                     ),
-                  ),
+                  if (voucher.icon != null && voucher.icon!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      voucher.valueLabel,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: kPrimaryColor,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
                   if (voucher.daysLeft != null && voucher.isActive) ...[
                     const SizedBox(height: 8),
                     Text(
@@ -304,6 +321,17 @@ class _VoucherCard extends StatelessWidget {
                           color: kSecondaryTextColor,
                         ),
                       ),
+                    if (voucher.applicableCategories.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        voucher.applicableCategories.take(3).join(' · '),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: kSecondaryTextColor,
+                        ),
+                      ),
+                    ],
                     if (until != null) ...[
                       const SizedBox(height: 4),
                       Text(

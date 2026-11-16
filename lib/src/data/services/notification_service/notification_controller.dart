@@ -97,10 +97,11 @@ class NotificationController {
         if (screen != null) {
           // Construct the internal app link format expected by DeepLinkService
           deepLink = 'app://$screen${id != null ? '/$id' : ''}';
-        } else if (actionType == 'open_product_inquiry' &&
-            id != null &&
-            id.isNotEmpty) {
-          deepLink = 'app://partnerinquirydetail/$id';
+        } else if (actionType == 'open_product_inquiry') {
+          // Always open partner enquiry listing (optional id for soft highlight).
+          deepLink = (id != null && id.isNotEmpty)
+              ? 'app://partnerInquiries/$id'
+              : 'app://partnerInquiries';
         } else if (actionType == 'open_offer' && id != null && id.isNotEmpty) {
           deepLink = 'app://offerdetail/$id';
         } else if ((actionType == 'open_shop' || actionType == 'open_branch') &&

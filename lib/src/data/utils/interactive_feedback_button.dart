@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:setgo/src/data/services/haptic_helper.dart';
 import 'package:flutter/material.dart';
 
@@ -57,38 +59,50 @@ class _InteractiveFeedbackButtonState extends State<InteractiveFeedbackButton>
     super.dispose();
   }
 
-  Future<void> _handleTap() async {
+  /// Invoke [onPressed] immediately so navigation is not lost if a parent
+  /// ListView rebuild cancels the gesture mid-animation (common "first tap
+  /// ignored" symptom). Haptic + scale run afterward without blocking.
+  void _handleTap() {
     if (widget.onPressed == null) return;
-
-    await HapticHelper.impact(widget.tapImpact);
-    await _controller.forward();
-
     widget.onPressed!();
-
-    await _controller.reverse();
+    unawaited(_playTapFeedback(widget.tapImpact));
   }
 
-  Future<void> _handleLongPress() async {
+  void _handleLongPress() {
     if (widget.onLongPress == null) return;
-
-    await HapticHelper.impact(widget.longPressImpact);
-    await _controller.forward();
-
     widget.onLongPress!();
+    unawaited(_playTapFeedback(widget.longPressImpact, reverse: false));
   }
 
   Future<void> _handleLongPressEnd(LongPressEndDetails details) async {
-    await _controller.reverse();
-
+    if (_controller.value > 0) {
+      await _controller.reverse();
+    }
     widget.onLongPressEnd?.call(details);
+  }
+
+  Future<void> _playTapFeedback(
+    HapticImpact impact, {
+    bool reverse = true,
+  }) async {
+    if (!mounted) return;
+    await HapticHelper.impact(impact);
+    if (!mounted) return;
+    await _controller.forward();
+    if (!mounted) return;
+    if (reverse) {
+      await _controller.reverse();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _handleTap,
-      onLongPress: _handleLongPress,
-      onLongPressEnd: _handleLongPressEnd,
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onPressed == null ? null : _handleTap,
+      onLongPress: widget.onLongPress == null ? null : _handleLongPress,
+      onLongPressEnd:
+          widget.onLongPressEnd == null ? null : _handleLongPressEnd,
       child: ScaleTransition(scale: _scaleAnimation, child: widget.child),
     );
   }
