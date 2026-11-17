@@ -103,7 +103,7 @@ class _BookingPaymentPageState extends ConsumerState<BookingPaymentPage> {
       var order = _order;
       if (order == null || !order.isValid) {
         final res = await BookingService.createPaymentOrder(
-          api: ref.read(apiProvider),
+          api: ref.read(publicApiProvider),
           bookingId: widget.booking.id,
         );
         if (!res.success || res.data == null || !res.data!.isValid) {
@@ -170,7 +170,7 @@ class _BookingPaymentPageState extends ConsumerState<BookingPaymentPage> {
     }
 
     final verify = await BookingService.verifyPayment(
-      api: ref.read(apiProvider),
+      api: ref.read(publicApiProvider),
       bookingId: widget.booking.id,
       razorpayOrderId: orderId,
       razorpayPaymentId: paymentId,
@@ -189,10 +189,14 @@ class _BookingPaymentPageState extends ConsumerState<BookingPaymentPage> {
       return;
     }
 
+    final verified = verify.data!;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => BookingConfirmedPage(booking: verify.data!),
+        builder: (_) => BookingConfirmedPage(
+          booking: verified.booking,
+          spinUnlocked: verified.spinUnlocked,
+        ),
       ),
     );
   }
@@ -201,7 +205,7 @@ class _BookingPaymentPageState extends ConsumerState<BookingPaymentPage> {
     // Best-effort: tell backend the attempt failed (slot may still be held).
     unawaited(
       BookingService.failPayment(
-        api: ref.read(apiProvider),
+        api: ref.read(publicApiProvider),
         bookingId: widget.booking.id,
         errorReason: response.message,
         errorCode: response.code,

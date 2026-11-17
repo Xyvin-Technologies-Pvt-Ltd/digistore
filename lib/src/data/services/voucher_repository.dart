@@ -116,13 +116,21 @@ class VoucherRepository {
   }
 
   /// POST /vouchers/spin/:campaignId
+  ///
+  /// Sends [deviceId] in the body and relies on [ApiProvider] for
+  /// `X-Device-Id` (anti-abuse), per Spin & Win API guide.
   Future<SpinResult> executeSpin({
     required String campaignId,
     required String transactionId,
   }) async {
+    final deviceId =
+        await _api.deviceIdService?.getPermanentDeviceId() ?? '';
     final response = await _api.post(
       '/vouchers/spin/${campaignId.trim()}',
-      {'transactionId': transactionId.trim()},
+      {
+        'transactionId': transactionId.trim(),
+        if (deviceId.isNotEmpty) 'deviceId': deviceId,
+      },
       requireAuth: true,
     );
     final body = response.data;

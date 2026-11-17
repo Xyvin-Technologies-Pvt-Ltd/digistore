@@ -363,10 +363,14 @@ class _WheelPainter extends CustomPainter {
 
     for (var i = 0; i < count; i++) {
       final segment = i < segments.length ? segments[i] : null;
+      final exhausted = segment?.isExhausted == true;
+      final baseColor = _parseColor(segment?.color) ??
+          _fallbackColors[i % _fallbackColors.length];
       final paint = Paint()
         ..style = PaintingStyle.fill
-        ..color = _parseColor(segment?.color) ??
-            _fallbackColors[i % _fallbackColors.length];
+        ..color = exhausted
+            ? Color.lerp(baseColor, Colors.grey.shade400, 0.55)!
+            : baseColor;
       final start = -math.pi / 2 + i * sweep;
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
@@ -379,14 +383,17 @@ class _WheelPainter extends CustomPainter {
       final label = segment?.label ?? '';
       if (label.isNotEmpty) {
         final mid = start + sweep / 2;
+        final display = exhausted
+            ? (label.length > 10 ? '${label.substring(0, 8)}… ✓' : '$label ✓')
+            : (label.length > 14 ? '${label.substring(0, 12)}…' : label);
         final tp = TextPainter(
           text: TextSpan(
-            text: label.length > 14 ? '${label.substring(0, 12)}…' : label,
-            style: const TextStyle(
+            text: display,
+            style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: Colors.white.withValues(alpha: exhausted ? 0.7 : 1),
             ),
           ),
           textDirection: TextDirection.ltr,

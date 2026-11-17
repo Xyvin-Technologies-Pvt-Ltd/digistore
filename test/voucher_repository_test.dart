@@ -200,5 +200,11 @@ void main() {
     expect(result.voucherCode, 'SPIN-9X');
     expect(client.requests.last.method, 'POST');
     expect(client.requests.last.url.path, endsWith('/vouchers/spin/c1'));
+    expect(deviceHeader(client.requests.last), isNotEmpty);
+    final spinBody =
+        jsonDecode(client.requests.last.body) as Map<String, dynamic>;
+    expect(spinBody['transactionId'], 'tx1');
+    expect(spinBody['deviceId'], isNotEmpty);
+    expect(spinBody['deviceId'], deviceHeader(client.requests.last));
   });
 }

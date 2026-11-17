@@ -6,6 +6,11 @@ class SpinSegment {
   final bool isGrandPrize;
   final String? color;
   final String? icon;
+  final int? limit;
+  final int claimedCount;
+  final bool isExhausted;
+  final String? voucherCampaignId;
+  final String? offerId;
 
   const SpinSegment({
     required this.index,
@@ -15,6 +20,11 @@ class SpinSegment {
     this.isGrandPrize = false,
     this.color,
     this.icon,
+    this.limit,
+    this.claimedCount = 0,
+    this.isExhausted = false,
+    this.voucherCampaignId,
+    this.offerId,
   });
 
   factory SpinSegment.fromJson(Map<String, dynamic> json) {
@@ -26,6 +36,11 @@ class SpinSegment {
       isGrandPrize: json['isGrandPrize'] == true,
       color: json['color']?.toString(),
       icon: json['icon']?.toString(),
+      limit: json['limit'] == null ? null : _asInt(json['limit']),
+      claimedCount: _asInt(json['claimedCount']),
+      isExhausted: json['isExhausted'] == true,
+      voucherCampaignId: json['voucherCampaignId']?.toString(),
+      offerId: json['offerId']?.toString(),
     );
   }
 }
