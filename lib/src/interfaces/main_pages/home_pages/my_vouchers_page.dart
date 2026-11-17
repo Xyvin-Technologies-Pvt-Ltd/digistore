@@ -10,6 +10,7 @@ import '../../../data/providers/screen_size_provider.dart';
 import '../../../data/providers/voucher_provider.dart';
 import '../../components/empty_state.dart';
 import '../../components/loading_indicator.dart';
+import '../../components/safe_network_icon.dart';
 
 class MyVouchersPage extends ConsumerStatefulWidget {
   const MyVouchersPage({super.key});
@@ -218,34 +219,7 @@ class _VoucherCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (voucher.icon != null && voucher.icon!.isNotEmpty)
-                    Text(voucher.icon!, style: const TextStyle(fontSize: 22))
-                  else
-                    Text(
-                      voucher.valueLabel,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: kPrimaryColor,
-                        height: 1.2,
-                      ),
-                    ),
-                  if (voucher.icon != null && voucher.icon!.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      voucher.valueLabel,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: kPrimaryColor,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
+                  _VoucherLeadingVisual(voucher: voucher),
                   if (voucher.daysLeft != null && voucher.isActive) ...[
                     const SizedBox(height: 8),
                     Text(
@@ -353,5 +327,91 @@ class _VoucherCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _VoucherLeadingVisual extends StatelessWidget {
+  final VoucherModel voucher;
+
+  const _VoucherLeadingVisual({required this.voucher});
+
+  static bool _isNetworkUrl(String value) {
+    final v = value.trim().toLowerCase();
+    return v.startsWith('http://') || v.startsWith('https://');
+  }
+
+  String? get _imageUrl {
+    final image = voucher.image?.trim();
+    if (image != null && image.isNotEmpty && _isNetworkUrl(image)) {
+      return image;
+    }
+    final icon = voucher.icon?.trim();
+    if (icon != null && icon.isNotEmpty && _isNetworkUrl(icon)) {
+      return icon;
+    }
+    return null;
+  }
+
+  String? get _emojiIcon {
+    final icon = voucher.icon?.trim();
+    if (icon == null || icon.isEmpty || _isNetworkUrl(icon)) return null;
+    return icon;
+  }
+
+  Widget _valueLabel({required double fontSize}) {
+    return Text(
+      voucher.valueLabel,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+        color: kPrimaryColor,
+        height: 1.2,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = _imageUrl;
+    if (imageUrl != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SafeNetworkIcon(
+            url: imageUrl,
+            width: 40,
+            height: 40,
+            fit: BoxFit.contain,
+            placeholderBuilder: (_) => SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: kPrimaryColor.withValues(alpha: 0.5),
+              ),
+            ),
+            errorBuilder: (_) => _valueLabel(fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          _valueLabel(fontSize: 12),
+        ],
+      );
+    }
+
+    final emoji = _emojiIcon;
+    if (emoji != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(height: 6),
+          _valueLabel(fontSize: 12),
+        ],
+      );
+    }
+
+    return _valueLabel(fontSize: 16);
   }
 }
