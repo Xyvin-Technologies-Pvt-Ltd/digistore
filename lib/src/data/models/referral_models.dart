@@ -108,6 +108,22 @@ class ReferralSharePayload {
   /// point shows ₹10 for a 10-point reward.
   num get earnedRupees => totalPointsEarned / 10;
 
+  /// Formats the official referral invite message in Malayalam with code and link.
+  static String buildInviteMessage({
+    required String referralCode,
+    required String shareUrl,
+  }) {
+    final code = referralCode.trim().toUpperCase();
+    return 'ഇനി ഓരോ ഷോപ്പിംഗും കൂടുതൽ ലാഭകരമാക്കാം!\n\n'
+        'നമ്മുടെ നാട്ടിലെ കടകളിലെ മികച്ച ഓഫറുകളും ഡിസ്കൗണ്ടുകളും കണ്ടെത്താനും ഓരോ പർച്ചേസിനും റിവാർഡ് പോയിന്റുകൾ നേടാനും ഇതാ SETGO ആപ്പ്!\n\n'
+        'Referral Code ഉപയോഗിച്ച് രജിസ്റ്റർ ചെയ്യുമ്പോൾ കുറഞ്ഞത് ₹100 മൂല്യമുള്ള വൗച്ചർ നേടാം!\n\n'
+        'സുഹൃത്തുക്കളെ റഫർ ചെയ്ത് ₹10,000 വരെ ക്യാഷ്ബാക്ക് നേടാനുള്ള അവസരവും!\n\n'
+        'നാട്ടിലെ കടകളിലെ ആകർഷകമായ ഓഫറുകളും ഡിസ്കൗണ്ടുകളും അറിയാം. ഓരോ പർച്ചേസിലും റിവാർഡ് പോയിന്റുകൾ നേടാം.\n\n'
+        'ഇപ്പോൾ തന്നെ SETGO ആപ്പ് ഡൗൺലോഡ് ചെയ്യൂ!\n'
+        '$shareUrl\n\n'
+        'Referral Code: *$code*';
+  }
+
   /// Rewrites invite links to match the API host the app is actually using.
   ///
   /// UAT backends may still return a production `shareUrl`; this keeps
@@ -119,10 +135,10 @@ class ReferralSharePayload {
     final correctUrl = '${ReferralCode.landingBaseFromApi(apiBaseUrl)}?ref=$code';
     // Always rebuild the invite text so a stale production URL cannot survive
     // string-replace edge cases from older backend payloads.
-    final message =
-        'Hey! I\'m using SetGo to discover local shops, get exclusive '
-        'discounts, and earn reward points on every purchase. Use my referral '
-        'code *$code* when you sign up! Download the app: $correctUrl';
+    final message = buildInviteMessage(
+      referralCode: code,
+      shareUrl: correctUrl,
+    );
 
     return ReferralSharePayload(
       referralCode: referralCode,

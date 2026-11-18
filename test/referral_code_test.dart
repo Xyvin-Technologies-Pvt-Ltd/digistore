@@ -23,6 +23,15 @@ void main() {
         ),
         'S00009',
       );
+      expect(
+        ReferralCode.extract(
+          ReferralSharePayload.buildInviteMessage(
+            referralCode: 'S00009',
+            shareUrl: 'https://setgoinnovations.com/app?ref=S00009',
+          ),
+        ),
+        'S00009',
+      );
       expect(ReferralCode.extract('order S000041 extra'), isNull);
     });
 

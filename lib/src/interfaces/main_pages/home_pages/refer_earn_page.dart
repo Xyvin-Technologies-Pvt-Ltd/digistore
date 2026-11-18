@@ -148,7 +148,10 @@ class _ReferEarnPageState extends ConsumerState<ReferEarnPage> {
     final aligned = _aligned(payload);
     final text = aligned.shareMessage.isNotEmpty
         ? aligned.shareMessage
-        : 'Use my SetGo referral code ${aligned.referralCode}. ${aligned.shareUrl}';
+        : ReferralSharePayload.buildInviteMessage(
+            referralCode: aligned.referralCode,
+            shareUrl: aligned.shareUrl,
+          );
     debugPrint('Referral shareUrl=${aligned.shareUrl} api=${ref.read(publicApiProvider).baseUrl}');
     await SharePlus.instance.share(
       ShareParams(text: text, title: aligned.shareTitle),
