@@ -120,8 +120,9 @@ class NotificationService {
         if (screen != null) {
           deepLink = _deepLinkService.generateDeepLink(screen, id: id);
         } else if (actionType == 'open_product_inquiry') {
+          // Listing page (not detail) — matches backend action.screen PartnerInquiries.
           deepLink = _deepLinkService.generateDeepLink(
-            'partnerinquirydetail',
+            'partnerInquiries',
             id: id,
           );
         } else if (actionType == 'open_offer') {

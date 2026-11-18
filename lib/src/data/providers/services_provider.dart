@@ -6,6 +6,7 @@ import '../models/category_model.dart';
 import '../models/booking_estimate.dart';
 import '../models/booking_razorpay_order.dart';
 import '../models/service_model.dart';
+import '../models/spin_models.dart';
 import '../utils/name_case.dart';
 import 'api_provider.dart';
 import 'auth_provider.dart';
@@ -559,7 +560,8 @@ class BookingService {
       final data = res.data!['data'] ?? res.data!;
       if (data is Map) {
         final map = Map<String, dynamic>.from(data);
-        final booking = BookingModel.fromJson(map);
+        final bookingMap = _bookingPayloadMap(map);
+        final booking = BookingModel.fromJson(bookingMap);
         BookingRazorpayOrder? order;
         final rawOrder = map['razorpayOrder'] ?? map['razorpay_order'];
         if (rawOrder is Map) {
@@ -568,7 +570,12 @@ class BookingService {
           );
         }
         return ApiResponse.success(
-          CreateBookingResult(booking: booking, razorpayOrder: order),
+          CreateBookingResult(
+            booking: booking,
+            razorpayOrder: order,
+            spinUnlocked: SpinUnlock.tryParse(map['spinUnlocked']) ??
+                SpinUnlock.tryParse(bookingMap['spinUnlocked']),
+          ),
         );
       }
     }
@@ -594,7 +601,7 @@ class BookingService {
   }
 
   /// POST /bookings/:id/payment/verify — server-side signature check.
-  static Future<ApiResponse<BookingModel>> verifyPayment({
+  static Future<ApiResponse<BookingVerifyResult>> verifyPayment({
     required ApiProvider api,
     required String bookingId,
     required String razorpayOrderId,
@@ -609,12 +616,34 @@ class BookingService {
     if (res.success && res.data != null) {
       final data = res.data!['data'] ?? res.data!;
       if (data is Map) {
+        final map = Map<String, dynamic>.from(data);
+        final bookingMap = _bookingPayloadMap(map);
+        // Prefer booking id from nested payload; fall back to path id.
+        if ((bookingMap['_id'] ?? bookingMap['id'] ?? '')
+            .toString()
+            .trim()
+            .isEmpty) {
+          bookingMap['_id'] = bookingId;
+        }
         return ApiResponse.success(
-          BookingModel.fromJson(Map<String, dynamic>.from(data)),
+          BookingVerifyResult(
+            booking: BookingModel.fromJson(bookingMap),
+            spinUnlocked: SpinUnlock.tryParse(map['spinUnlocked']) ??
+                SpinUnlock.tryParse(bookingMap['spinUnlocked']),
+          ),
         );
       }
     }
     return ApiResponse.error(res.message ?? 'Payment verification failed');
+  }
+
+  /// Resolves either a flat booking object or `{ booking: {...} }` wrappers.
+  static Map<String, dynamic> _bookingPayloadMap(Map<String, dynamic> map) {
+    final nested = map['booking'];
+    if (nested is Map) {
+      return Map<String, dynamic>.from(nested);
+    }
+    return Map<String, dynamic>.from(map);
   }
 
   /// POST /bookings/:id/payment/fail — record cancel / gateway failure.
@@ -651,12 +680,24 @@ class BookingService {
 class CreateBookingResult {
   final BookingModel booking;
   final BookingRazorpayOrder? razorpayOrder;
+  final SpinUnlock? spinUnlocked;
 
-  const CreateBookingResult({required this.booking, this.razorpayOrder});
+  const CreateBookingResult({
+    required this.booking,
+    this.razorpayOrder,
+    this.spinUnlocked,
+  });
 
   /// Free bookings are confirmed immediately (no Razorpay).
   bool get requiresPayment =>
       booking.totalAmount > 0 &&
       (razorpayOrder?.isValid == true ||
           booking.paymentStatus.toUpperCase() == 'PENDING');
+}
+
+class BookingVerifyResult {
+  final BookingModel booking;
+  final SpinUnlock? spinUnlocked;
+
+  const BookingVerifyResult({required this.booking, this.spinUnlocked});
 }

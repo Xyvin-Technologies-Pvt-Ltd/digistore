@@ -1,10 +1,49 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_secure_storage/test/test_flutter_secure_storage_platform.dart';
+import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:setgo/src/data/models/app_notification_model.dart';
 import 'package:setgo/src/data/models/partner_inquiry_model.dart';
+import 'package:setgo/src/data/providers/api_provider.dart';
+import 'package:setgo/src/data/providers/partner_inquiries_provider.dart';
 import 'package:setgo/src/data/services/deep_link_service.dart';
+import 'package:setgo/src/data/services/device_id_service.dart';
+import 'package:setgo/src/data/services/secure_storage_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _RecordingClient extends http.BaseClient {
+  final List<http.BaseRequest> requests = [];
+  final List<http.Response> _queued = [];
+
+  void enqueue(int status, Object body) {
+    _queued.add(
+      http.Response(
+        jsonEncode(body),
+        status,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
+  }
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    requests.add(request);
+    final response = _queued.removeAt(0);
+    return http.StreamedResponse(
+      Stream<List<int>>.value(response.bodyBytes),
+      response.statusCode,
+      headers: response.headers,
+      request: request,
+    );
+  }
+}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('PartnerInquiryModel', () {
     test('parses multi-item inquiry payload from API', () {
       final json = {
@@ -81,10 +120,12 @@ void main() {
         'action': {
           'type': 'open_product_inquiry',
           'targetId': 'inq_123',
+          'screen': 'PartnerInquiries',
         },
       });
       expect(model.action?.type, 'open_product_inquiry');
       expect(model.action?.targetId, 'inq_123');
+      expect(model.action?.screen, 'PartnerInquiries');
       expect(model.action?.isNavigable, isTrue);
     });
 
@@ -123,7 +164,25 @@ void main() {
   });
 
   group('DeepLinkService inquiry deep links', () {
-    test('generateDeepLink builds partner inquiry URL', () {
+    test('generateDeepLink builds partner inquiry listing URL', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final service = container.read(deepLinkServiceProvider);
+      expect(
+        service.generateDeepLink('partnerInquiries', id: 'inq_99'),
+        'https://setgo.in/app/partnerInquiries/inq_99',
+      );
+      expect(
+        service.generateDeepLink('PartnerInquiries'),
+        'https://setgo.in/app/partnerInquiries',
+      );
+      expect(
+        service.generateDeepLink('inquiry', id: 'cart_1'),
+        'https://setgo.in/app/partnerInquiries/cart_1',
+      );
+    });
+
+    test('generateDeepLink still supports explicit detail URLs', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final service = container.read(deepLinkServiceProvider);
@@ -131,9 +190,100 @@ void main() {
         service.generateDeepLink('partnerinquirydetail', id: 'inq_99'),
         'https://setgo.in/app/partnerinquirydetail/inq_99',
       );
+    });
+  });
+
+  group('PartnerInquiriesNotifier', () {
+    late _RecordingClient client;
+    late ProviderContainer container;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStoragePlatform.instance = TestFlutterSecureStoragePlatform({
+        'bearer_token': 'partner-token',
+        'is_partner': 'true',
+      });
+      client = _RecordingClient();
+      final storage = SecureStorageService(
+        storage: const FlutterSecureStorage(),
+      );
+      container = ProviderContainer(
+        overrides: [
+          apiProvider.overrideWithValue(
+            ApiProvider(
+              baseUrl: 'https://example.test/api/mobile/partner',
+              secureStorage: storage,
+              deviceIdService: DeviceIdService(
+                storage: const FlutterSecureStorage(),
+              ),
+              client: client,
+            ),
+          ),
+        ],
+      );
+    });
+
+    tearDown(() => container.dispose());
+
+    test('fetchInquiries loads paginated list from GET /inquiries', () async {
+      client.enqueue(200, {
+        'success': true,
+        'message': 'ok',
+        'data': [
+          {
+            '_id': 'inq_1',
+            'customer': {'name': 'Ada', 'phone': '999'},
+            'items': [
+              {'title': 'CCTV', 'quantity': 1, 'effectivePrice': 100},
+            ],
+            'totalQuantity': 1,
+            'subtotal': 100,
+            'inquiryStatus': 'pending',
+            'lastInquirySentAt': '2026-11-05T04:20:00.000Z',
+          },
+          {
+            '_id': 'inq_2',
+            'customer': {'name': 'Bob'},
+            'items': [],
+            'inquiryStatus': 'contacted',
+          },
+        ],
+        'pagination': {'total': 2, 'page': 1, 'limit': 20, 'pages': 1},
+      });
+
+      await container
+          .read(partnerInquiriesProvider.notifier)
+          .fetchInquiries(refresh: true);
+
+      expect(client.requests.single.url.path, endsWith('/inquiries'));
+      expect(client.requests.single.url.queryParameters['page'], '1');
+
+      final state = container.read(partnerInquiriesProvider);
+      expect(state.error, isNull);
+      expect(state.isLoading, isFalse);
+      expect(state.inquiries.length, 2);
+      expect(state.inquiries.first.id, 'inq_1');
+      expect(state.inquiries.first.customer.name, 'Ada');
+      expect(state.pagination?.total, 2);
+      expect(state.hasMore, isFalse);
+    });
+
+    test('fetchInquiries surfaces API errors', () async {
+      client.enqueue(401, {'success': false, 'message': 'Unauthorized'});
+
+      await container.read(partnerInquiriesProvider.notifier).refresh();
+      final state = container.read(partnerInquiriesProvider);
+      expect(state.inquiries, isEmpty);
+      expect(state.error, isNotNull);
+    });
+
+    test('setHighlightId stores soft-highlight target', () {
+      container
+          .read(partnerInquiriesProvider.notifier)
+          .setHighlightId('inq_highlight');
       expect(
-        service.generateDeepLink('partner-inquiry-detail', id: 'cart_1'),
-        'https://setgo.in/app/partnerinquirydetail/cart_1',
+        container.read(partnerInquiriesProvider).highlightId,
+        'inq_highlight',
       );
     });
   });

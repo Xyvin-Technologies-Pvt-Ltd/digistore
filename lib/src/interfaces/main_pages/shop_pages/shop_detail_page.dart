@@ -17,12 +17,15 @@ import '../../components/shops/product_card.dart';
 import '../../components/services/service_card.dart';
 import '../../../data/providers/shops_provider.dart';
 import '../../../data/providers/services_provider.dart';
+import '../../../data/providers/bulk_redemption_provider.dart';
 import '../../../data/models/service_model.dart';
 import '../services/service_details_page.dart';
 
 import '../../components/shops/shop_branches.dart';
 import '../../../../src/data/models/business_info.dart';
 import '../../../data/providers/branches.dart';
+import '../../components/primary_button.dart';
+import '../../components/offers/redeemable_offers_sheet.dart';
 
 class ShopDetailPage extends ConsumerStatefulWidget {
   final String? shopName;
@@ -99,6 +102,9 @@ class _ShopDetailPageState extends ConsumerState<ShopDetailPage> {
 
     final offersAsync = shopId.isNotEmpty
         ? ref.watch(shopOffersProvider(shopId))
+        : null;
+    final offersBundleAsync = shopId.isNotEmpty
+        ? ref.watch(shopOffersBundleProvider(shopId))
         : null;
     final productsAsync = shopId.isNotEmpty
         ? ref.watch(shopProductsProvider(shopId))
@@ -333,6 +339,91 @@ class _ShopDetailPageState extends ConsumerState<ShopDetailPage> {
                                       },
                                     ),
                                   ),
+                                  if (offersBundleAsync != null)
+                                    offersBundleAsync.when(
+                                      data: (bundle) {
+                                        final eligible =
+                                            bundle.eligibleOffersCount > 0 ||
+                                            bundle.eligibleOffers.isNotEmpty ||
+                                            offers.length >= 2;
+                                        if (!eligible) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        final linkedCount =
+                                            bundle.cart?.selectedOfferIds
+                                                .length ??
+                                            0;
+                                        return Padding(
+                                          padding: EdgeInsets.only(
+                                            top: screenSize.responsivePadding(
+                                              12,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              if (bundle.eligibleOffersCount >
+                                                  0)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(
+                                                    bottom: 8,
+                                                  ),
+                                                  child: Text(
+                                                    '${bundle.eligibleOffersCount} offer(s) ready to redeem'
+                                                    '${linkedCount > 0 ? ' · $linkedCount linked to cart' : ''}',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 12,
+                                                      color: kPrimaryColor,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                              PrimaryButton(
+                                                text: 'Select / redeem offers',
+                                                onPressed: () async {
+                                                  final selection =
+                                                      await showRedeemableOffersSheet(
+                                                    context: context,
+                                                    shopId: shopId,
+                                                    shopName: currentShopName,
+                                                  );
+                                                  if (selection == null ||
+                                                      !context.mounted) {
+                                                    return;
+                                                  }
+                                                  await Navigator.of(context)
+                                                      .pushNamed(
+                                                    'bulkRedemption',
+                                                    arguments: {
+                                                      'partnerId': shopId,
+                                                      'shopId': shopId,
+                                                      'shopName':
+                                                          currentShopName,
+                                                      'cartId':
+                                                          selection.cartId ??
+                                                          bundle.cartId,
+                                                      'offerIds':
+                                                          selection.offerIds,
+                                                      'redeemAll':
+                                                          selection.redeemAll,
+                                                      'saleAmount': selection
+                                                          .cartSubtotal,
+                                                      'cartSubtotal': selection
+                                                          .cartSubtotal,
+                                                    },
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                      loading: () => const SizedBox.shrink(),
+                                      error: (_, _) => const SizedBox.shrink(),
+                                    ),
                                   SizedBox(
                                     height: screenSize.responsivePadding(24),
                                   ),

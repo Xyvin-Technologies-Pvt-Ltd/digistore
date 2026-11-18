@@ -21,9 +21,12 @@ import '../../interfaces/main_pages/support_pages/support_tickets_page.dart';
 import '../../interfaces/main_pages/support_pages/support_ticket_detail_page.dart';
 import '../../interfaces/main_pages/home_pages/terms_privacy_page.dart';
 import '../../interfaces/main_pages/home_pages/about_app_page.dart';
+import '../../interfaces/main_pages/offer_pages/bulk_redemption_page.dart';
+import '../../interfaces/main_pages/reward_pages/spin_win_page.dart';
 import '../../interfaces/main_pages/partner/partner_redemption_page.dart';
 import '../../interfaces/main_pages/partner/partner_qr_scanner_page.dart';
 import '../../interfaces/main_pages/partner/partner_redemption_success_page.dart';
+import '../../interfaces/main_pages/partner/partner_bulk_verify_page.dart';
 import '../../interfaces/main_pages/partner/partner_account_page.dart';
 import '../../interfaces/main_pages/partner/create_product.dart';
 import '../../interfaces/main_pages/partner/create_offer_page.dart';
@@ -31,6 +34,7 @@ import '../../interfaces/main_pages/offers.dart';
 import '../../interfaces/main_pages/products.dart';
 import '../../interfaces/main_pages/partner/partner_history.dart';
 import '../../interfaces/main_pages/partner/partner_bookings_page.dart';
+import '../../interfaces/main_pages/partner/partner_inquiries_page.dart';
 import '../../interfaces/main_pages/partner/partner_inquiry_detail_page.dart';
 import '../../interfaces/main_pages/partner/sales_calculator_page.dart';
 import '../../interfaces/main_pages/partner/partner_reviews_page.dart';
@@ -262,6 +266,27 @@ Route<dynamic> generateRoute(RouteSettings? settings) {
       transitionDuration = const Duration(milliseconds: 300);
       break;
 
+    case 'spinWin':
+      final args = settings?.arguments as Map<String, dynamic>? ?? {};
+      page = SpinWinPage(args: args);
+      transitionToUse = TransitionType.slideFromBottom;
+      transitionDuration = const Duration(milliseconds: 350);
+      break;
+
+    case 'bulkRedemption':
+      final args = settings?.arguments as Map<String, dynamic>? ?? {};
+      page = BulkRedemptionPage(args: args);
+      transitionToUse = TransitionType.slideFromRight;
+      transitionDuration = const Duration(milliseconds: 300);
+      break;
+
+    case 'partnerBulkVerify':
+      final args = settings?.arguments as Map<String, dynamic>? ?? {};
+      page = PartnerBulkVerifyPage(args: args);
+      transitionToUse = TransitionType.slideFromRight;
+      transitionDuration = const Duration(milliseconds: 300);
+      break;
+
     case 'helpSupport':
       page = const HelpSupportPage();
       transitionToUse = TransitionType.slideFromRight;
@@ -349,6 +374,28 @@ Route<dynamic> generateRoute(RouteSettings? settings) {
 
     case 'partnerBookings':
       page = const PartnerBookingsPage();
+      transitionToUse = TransitionType.slideFromRight;
+      transitionDuration = const Duration(milliseconds: 300);
+      break;
+
+    case 'partnerInquiries':
+    case 'partner-inquiries':
+    case 'partnerinquiries':
+    case 'PartnerInquiries':
+      final args = settings?.arguments;
+      String? highlightId;
+      if (args is Map) {
+        highlightId =
+            (args['highlightInquiryId'] ??
+                    args['inquiryId'] ??
+                    args['cartId'] ??
+                    args['id'] ??
+                    args['targetId'])
+                ?.toString();
+      } else if (args is String && args.trim().isNotEmpty) {
+        highlightId = args.trim();
+      }
+      page = PartnerInquiriesPage(highlightInquiryId: highlightId);
       transitionToUse = TransitionType.slideFromRight;
       transitionDuration = const Duration(milliseconds: 300);
       break;

@@ -16,6 +16,7 @@ import 'src/data/services/notification_service/notification_controller.dart';
 import 'src/data/services/navigation_service.dart';
 import 'src/data/services/connectivity_service.dart';
 import 'src/data/constants/style_constants.dart';
+import 'src/data/utils/install_checker.dart';
 
 bool _isBenignSvgParseError(Object error) {
   final text = error.toString();
@@ -26,6 +27,7 @@ bool _isBenignSvgParseError(Object error) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await InstallChecker().checkFirstInstall();
   ConnectivityService.instance.initialize();
 
   if (Platform.isAndroid) {

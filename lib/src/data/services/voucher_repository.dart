@@ -1,17 +1,11 @@
+import '../models/spin_models.dart';
 import '../models/voucher_models.dart';
 import '../providers/api_provider.dart';
-import 'referral_store.dart';
 
 class VoucherRepository {
   final ApiProvider _api;
-  final ReferralStore _store;
 
-  VoucherRepository(this._api, this._store);
-
-  Future<Map<String, String>> _deviceHeaders() async {
-    final deviceId = await _store.deviceId();
-    return {'x-device-id': deviceId};
-  }
+  VoucherRepository(this._api);
 
   /// GET /vouchers/my-vouchers?status=active|redeemed|expired
   Future<List<VoucherModel>> myVouchers({String status = 'active'}) async {
@@ -19,7 +13,6 @@ class VoucherRepository {
       '/vouchers/my-vouchers',
       requireAuth: true,
       queryParams: {'status': status},
-      headers: await _deviceHeaders(),
     );
     final body = response.data;
     if (!response.success || body == null || body['success'] == false) {
@@ -42,6 +35,7 @@ class VoucherRepository {
     required String voucherCode,
     required double cartAmount,
     String? category,
+    List<String>? categories,
     String? partnerId,
   }) async {
     final code = voucherCode.trim();
@@ -49,10 +43,17 @@ class VoucherRepository {
       return const VoucherValidationResult.invalid('Enter a voucher code');
     }
 
+    final cats = <String>[
+      if (categories != null) ...categories.where((c) => c.trim().isNotEmpty),
+      if (category != null && category.trim().isNotEmpty) category.trim(),
+    ];
+
     final payload = <String, dynamic>{
       'voucherCode': code,
       'cartAmount': cartAmount,
-      if (category != null && category.isNotEmpty) 'category': category,
+      if (cats.isNotEmpty) 'categories': cats,
+      // Keep singular for older backends that still expect it.
+      if (cats.length == 1) 'category': cats.first,
       if (partnerId != null && partnerId.isNotEmpty) 'partnerId': partnerId,
     };
 
@@ -60,7 +61,6 @@ class VoucherRepository {
       '/vouchers/validate',
       payload,
       requireAuth: true,
-      headers: await _deviceHeaders(),
     );
     final body = response.data;
     final message =
@@ -91,6 +91,58 @@ class VoucherRepository {
             message: message,
             voucher: result.voucher,
           );
+  }
+
+  /// GET /vouchers/spin-status/:transactionId
+  Future<SpinStatus> spinStatus(String transactionId) async {
+    final id = transactionId.trim();
+    if (id.isEmpty) {
+      return const SpinStatus.unavailable(reason: 'Missing transaction');
+    }
+
+    final response = await _api.get(
+      '/vouchers/spin-status/$id',
+      requireAuth: true,
+    );
+    final body = response.data;
+    if (!response.success || body == null) {
+      return SpinStatus.unavailable(
+        reason: response.message ?? 'Spin not available',
+      );
+    }
+
+    final data = _asMap(body['data']) ?? body;
+    return SpinStatus.fromJson(data);
+  }
+
+  /// POST /vouchers/spin/:campaignId
+  ///
+  /// Sends [deviceId] in the body and relies on [ApiProvider] for
+  /// `X-Device-Id` (anti-abuse), per Spin & Win API guide.
+  Future<SpinResult> executeSpin({
+    required String campaignId,
+    required String transactionId,
+  }) async {
+    final deviceId =
+        await _api.deviceIdService?.getPermanentDeviceId() ?? '';
+    final response = await _api.post(
+      '/vouchers/spin/${campaignId.trim()}',
+      {
+        'transactionId': transactionId.trim(),
+        if (deviceId.isNotEmpty) 'deviceId': deviceId,
+      },
+      requireAuth: true,
+    );
+    final body = response.data;
+    final message =
+        (body?['message'] ?? response.message ?? 'Could not spin').toString();
+
+    if (!response.success || body == null || body['success'] == false) {
+      throw Exception(message);
+    }
+
+    final data = _asMap(body['data']) ?? body;
+    return SpinResult.fromJson(data, fallbackMessage: message);
   }
 
   static Map<String, dynamic>? _asMap(dynamic value) {

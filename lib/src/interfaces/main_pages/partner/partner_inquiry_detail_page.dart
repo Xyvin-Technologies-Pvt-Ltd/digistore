@@ -421,9 +421,94 @@ class _PartnerInquiryDetailPageState
                             ),
                           ),
                         ),
+                        if (inquiry.selectedOffers.isNotEmpty ||
+                            inquiry.selectedOfferIds.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _DetailRow(
+                            label: 'Linked offers',
+                            value: inquiry.selectedOffers.isNotEmpty
+                                ? inquiry.selectedOffers
+                                    .map((o) => o.title)
+                                    .join(', ')
+                                : '${inquiry.selectedOfferIds.length} selected',
+                          ),
+                          const SizedBox(height: 12),
+                          _DetailRow(
+                            label: 'Offer redemption',
+                            value: inquiry.redemptionStatus,
+                          ),
+                        ],
                       ],
                     ),
                   ),
+                  if (inquiry.selectedOffers.isNotEmpty ||
+                      (inquiry.customer.phone?.isNotEmpty == true &&
+                          inquiry.redemptionStatus != 'completed')) ...[
+                    SizedBox(height: screenSize.responsivePadding(12)),
+                    _card(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Bulk redeem linked offers',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: _valueColor,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            inquiry.redemptionStatus == 'completed'
+                                ? 'Offers on this inquiry were already redeemed.'
+                                : 'Generate one OTP covering the cart-linked offers for this customer.',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 13,
+                              color: _labelColor,
+                            ),
+                          ),
+                          if (inquiry.redemptionStatus != 'completed') ...[
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).pushNamed(
+                                    'partnerBulkVerify',
+                                    arguments: {
+                                      'userPhone': inquiry.customer.phone,
+                                      'cartId': inquiry.id,
+                                      'saleAmount': inquiry.subtotal,
+                                      'batchId': inquiry.redemptionBatchId,
+                                    },
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: kPrimaryColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Start bulk OTP',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

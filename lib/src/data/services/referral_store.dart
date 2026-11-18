@@ -1,6 +1,6 @@
-import 'dart:math';
-
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'device_id_service.dart';
 
 /// Install-scoped referral state.
 ///
@@ -11,7 +11,14 @@ class ReferralStore {
   static const pendingCodeKey = 'setgo_pending_referral_code';
   static const deferredDoneKey = 'setgo_referral_deferred_done';
   static const clipboardCheckedKey = 'setgo_referral_clipboard_checked';
-  static const deviceIdKey = 'setgo_install_device_id';
+
+  /// Legacy prefs key — still used by [DeviceIdService] for one-time migration.
+  static const deviceIdKey = DeviceIdService.legacyPrefsKey;
+
+  final DeviceIdService _deviceIdService;
+
+  ReferralStore({DeviceIdService? deviceIdService})
+    : _deviceIdService = deviceIdService ?? DeviceIdService();
 
   Future<void> _queue = Future<void>.value();
 
@@ -74,24 +81,6 @@ class ReferralStore {
     await prefs.setBool(clipboardCheckedKey, true);
   }
 
-  Future<String> deviceId() {
-    return _sync(() async {
-      final prefs = await SharedPreferences.getInstance();
-      final existing = prefs.getString(deviceIdKey);
-      if (existing != null && existing.isNotEmpty) return existing;
-      final created = _createId();
-      await prefs.setString(deviceIdKey, created);
-      return created;
-    });
-  }
-
-  static String _createId() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
-        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
-  }
+  /// Permanent device ID (delegates to [DeviceIdService] — same ID as API header).
+  Future<String> deviceId() => _deviceIdService.getPermanentDeviceId();
 }

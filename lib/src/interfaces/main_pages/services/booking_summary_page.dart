@@ -140,7 +140,7 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
 
     // Server recalculates subtotal, applies voucher before GST, returns payable.
     final res = await BookingService.estimate(
-      api: ref.read(apiProvider),
+      api: ref.read(publicApiProvider),
       partnerId: widget.partnerId,
       items: _bookingItems,
       voucherCode: code,
@@ -184,7 +184,7 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
         : null;
 
     final res = await BookingService.createBooking(
-      api: ref.read(apiProvider),
+      api: ref.read(publicApiProvider),
       partnerId: widget.partnerId,
       items: items,
       bookingDate: widget.bookingDate,
@@ -214,7 +214,10 @@ class _BookingSummaryPageState extends ConsumerState<BookingSummaryPage> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => BookingConfirmedPage(booking: booking),
+          builder: (context) => BookingConfirmedPage(
+            booking: booking,
+            spinUnlocked: result.spinUnlocked,
+          ),
         ),
       );
       return;

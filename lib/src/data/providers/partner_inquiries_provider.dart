@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:setgo/src/data/models/partner_inquiry_model.dart';
+import 'package:setgo/src/data/models/product_model.dart';
 import 'package:setgo/src/utils/safe_parser.dart';
 import 'api_provider.dart';
 
@@ -55,6 +56,173 @@ class PartnerInquiryException implements Exception {
   String toString() => message;
 }
 
+class PartnerInquiriesState {
+  final List<PartnerInquiryModel> inquiries;
+  final bool isLoading;
+  final bool isLoadingMore;
+  final String? error;
+  final String selectedStatus;
+  final String searchQuery;
+  final PaginationModel? pagination;
+  final String? highlightId;
+
+  const PartnerInquiriesState({
+    this.inquiries = const [],
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.error,
+    this.selectedStatus = 'all',
+    this.searchQuery = '',
+    this.pagination,
+    this.highlightId,
+  });
+
+  bool get hasMore {
+    final p = pagination;
+    if (p == null) return false;
+    return p.page < p.pages;
+  }
+
+  PartnerInquiriesState copyWith({
+    List<PartnerInquiryModel>? inquiries,
+    bool? isLoading,
+    bool? isLoadingMore,
+    String? error,
+    bool clearError = false,
+    String? selectedStatus,
+    String? searchQuery,
+    PaginationModel? pagination,
+    String? highlightId,
+    bool clearHighlight = false,
+  }) {
+    return PartnerInquiriesState(
+      inquiries: inquiries ?? this.inquiries,
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      error: clearError ? null : (error ?? this.error),
+      selectedStatus: selectedStatus ?? this.selectedStatus,
+      searchQuery: searchQuery ?? this.searchQuery,
+      pagination: pagination ?? this.pagination,
+      highlightId: clearHighlight ? null : (highlightId ?? this.highlightId),
+    );
+  }
+}
+
+class PartnerInquiriesNotifier extends Notifier<PartnerInquiriesState> {
+  bool _fetchInFlight = false;
+
+  @override
+  PartnerInquiriesState build() => const PartnerInquiriesState();
+
+  /// Soft highlight for a specific inquiry after notification navigation.
+  void setHighlightId(String? id) {
+    final trimmed = id?.trim() ?? '';
+    state = state.copyWith(
+      highlightId: trimmed.isEmpty ? null : trimmed,
+      clearHighlight: trimmed.isEmpty,
+    );
+  }
+
+  Future<void> fetchInquiries({
+    String? status,
+    String? search,
+    int page = 1,
+    int limit = 20,
+    bool refresh = false,
+  }) async {
+    if (_fetchInFlight && !refresh) return;
+    _fetchInFlight = true;
+
+    final isFirstPage = page <= 1 || refresh;
+    state = state.copyWith(
+      isLoading: isFirstPage,
+      isLoadingMore: !isFirstPage,
+      clearError: true,
+      selectedStatus: status ?? state.selectedStatus,
+      searchQuery: search ?? state.searchQuery,
+    );
+
+    try {
+      final api = ref.read(apiProvider);
+      final queryParams = <String, String>{
+        'page': '${isFirstPage ? 1 : page}',
+        'limit': '$limit',
+      };
+      if (state.selectedStatus != 'all' && state.selectedStatus.isNotEmpty) {
+        queryParams['status'] = state.selectedStatus;
+      }
+      if (state.searchQuery.trim().isNotEmpty) {
+        queryParams['search'] = state.searchQuery.trim();
+      }
+
+      final res = await api.get(
+        '/inquiries',
+        queryParams: queryParams,
+        requireAuth: true,
+      );
+
+      if (!res.success || res.data == null) {
+        state = state.copyWith(
+          isLoading: false,
+          isLoadingMore: false,
+          error: res.message ?? 'Failed to load inquiries',
+        );
+        return;
+      }
+
+      final rawList = res.data!['data'] ?? res.data!['inquiries'];
+      final list = <PartnerInquiryModel>[];
+      if (rawList is List) {
+        for (final item in rawList) {
+          final map = SafeParser.asMap(item);
+          if (map != null) {
+            list.add(PartnerInquiryModel.fromJson(map));
+          }
+        }
+      }
+
+      PaginationModel? pagination;
+      final rawPagination = SafeParser.asMap(res.data!['pagination']);
+      if (rawPagination != null) {
+        pagination = PaginationModel.fromJson(rawPagination);
+      }
+
+      state = state.copyWith(
+        inquiries: isFirstPage ? list : [...state.inquiries, ...list],
+        isLoading: false,
+        isLoadingMore: false,
+        clearError: true,
+        pagination: pagination,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        isLoadingMore: false,
+        error: e.toString(),
+      );
+    } finally {
+      _fetchInFlight = false;
+    }
+  }
+
+  Future<void> refresh() => fetchInquiries(refresh: true, page: 1);
+
+  Future<void> loadMore() async {
+    if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
+    final nextPage = (state.pagination?.page ?? 1) + 1;
+    await fetchInquiries(page: nextPage);
+  }
+
+  Future<void> setStatusFilter(String status) async {
+    await fetchInquiries(status: status, page: 1, refresh: true);
+  }
+}
+
+final partnerInquiriesProvider =
+    NotifierProvider<PartnerInquiriesNotifier, PartnerInquiriesState>(
+      PartnerInquiriesNotifier.new,
+    );
+
 class PartnerInquiryActions {
   PartnerInquiryActions(this._ref);
 
@@ -96,6 +264,11 @@ class PartnerInquiryActions {
     }
 
     _ref.invalidate(partnerInquiryDetailProvider(id));
+    // Keep listing in sync after status changes from the detail page.
+    try {
+      await _ref.read(partnerInquiriesProvider.notifier).refresh();
+    } catch (_) {}
+
     return ApiResponse.success(updated, res.statusCode);
   }
 }

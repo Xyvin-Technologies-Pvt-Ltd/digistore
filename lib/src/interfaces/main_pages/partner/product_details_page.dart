@@ -17,6 +17,8 @@ import '../../components/confirmation_dialog.dart';
 import '../../components/full_screen_gallery.dart';
 import '../../components/guest_login_dialog.dart';
 import '../../components/offer_price_row.dart';
+import '../../components/offers/redeemable_offers_sheet.dart';
+import '../../../data/providers/bulk_redemption_provider.dart';
 import 'create_product.dart';
 
 class ProductDetailsPage extends ConsumerStatefulWidget {
@@ -304,6 +306,27 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             response.message ??
             'Inquiry sent to shop owner!';
         ToastService().showToast(context, message, type: ToastType.success);
+
+        // Optional cart ↔ offer linking (Notion §3).
+        final data = response.data?['data'];
+        final dataMap = data is Map
+            ? Map<String, dynamic>.from(data)
+            : <String, dynamic>{};
+        final cartId = (dataMap['cartId'] ??
+                dataMap['_id'] ??
+                dataMap['id'] ??
+                response.data?['cartId'])
+            ?.toString();
+        final shopId = _resolveShopId(_mergedProduct(null));
+        final partnerId =
+            (shopId.isNotEmpty ? shopId : model.partnerId)?.toString() ?? '';
+        if (partnerId.isNotEmpty && mounted) {
+          await _maybeLinkOffersAfterBuy(
+            partnerId: partnerId,
+            cartId: cartId,
+            shopName: model.title ?? 'Shop',
+          );
+        }
       } else {
         ToastService().showToast(
           context,
@@ -320,6 +343,56 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       );
     } finally {
       if (mounted) setState(() => isBuying = false);
+    }
+  }
+
+  Future<void> _maybeLinkOffersAfterBuy({
+    required String partnerId,
+    String? cartId,
+    required String shopName,
+  }) async {
+    final link = await showConfirmationDialog(
+      context: context,
+      title: 'Link offers to this order?',
+      message:
+          'You can attach eligible shop offers to this cart so the merchant '
+          'sees them on the inquiry.',
+      confirmText: 'Select offers',
+      cancelText: 'Skip',
+    );
+    if (link != true || !mounted) return;
+
+    final selection = await showRedeemableOffersSheet(
+      context: context,
+      shopId: partnerId,
+      shopName: shopName,
+      allowAttachToCart: true,
+    );
+    if (selection == null || !mounted) return;
+
+    try {
+      final attached = await ref
+          .read(bulkRedemptionRepositoryProvider)
+          .updateCartOffers(
+            partnerId: partnerId,
+            cartId: cartId ?? selection.cartId,
+            offerIds: selection.redeemAll ? null : selection.offerIds,
+            redeemAll: selection.redeemAll,
+          );
+      if (!mounted) return;
+      ToastService().showToast(
+        context,
+        attached.message ??
+            '${attached.selectedOfferIds.length} offer(s) linked to your order',
+        type: ToastType.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ToastService().showToast(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+        type: ToastType.error,
+      );
     }
   }
 
