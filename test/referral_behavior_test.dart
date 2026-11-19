@@ -320,6 +320,19 @@ void main() {
       client.enqueue(200, {
         'success': true,
         'data': {
+          'referralCode': 'S00009',
+          'shareTitle': 'Share SetGo',
+          'shareMessage': 'Join using my code S00009',
+        },
+      });
+      final options = await repo.shareOptions();
+      expect(options?.referralCode, 'S00009');
+      expect(options?.shareTitle, 'Share SetGo');
+      expect(options?.shareMessage, contains('S00009'));
+
+      client.enqueue(200, {
+        'success': true,
+        'data': {
           'items': [
             {
               'id': '1',

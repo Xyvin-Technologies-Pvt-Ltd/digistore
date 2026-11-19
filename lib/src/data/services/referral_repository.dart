@@ -102,6 +102,18 @@ class ReferralRepository {
     return payload.alignedToApiBase(_api.baseUrl);
   }
 
+  Future<ReferralSharePayload?> shareOptions() async {
+    final response = await _api.get('/referral/share-options', requireAuth: true);
+    final body = response.data;
+    final data = _asMap(body?['data']);
+    if (!response.success || body?['success'] == false || data == null) {
+      return null;
+    }
+    final payload = ReferralSharePayload.fromJson(data);
+    if (payload.referralCode.isEmpty) return null;
+    return payload.alignedToApiBase(_api.baseUrl);
+  }
+
   Future<ReferralHistoryPage> history({int page = 1, int limit = 20}) async {
     final response = await _api.get(
       '/referral/history',

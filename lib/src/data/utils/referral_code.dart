@@ -82,6 +82,7 @@ class ReferralCode {
       'www.setgoinnovations.com',
       'api-deals.setgoinnovations.com',
       'uat-api.setgoinnovations.com',
+      'deals.setgoinnovations.com',
     };
     if (!hosts.contains(host)) return false;
     final segments = uri.pathSegments

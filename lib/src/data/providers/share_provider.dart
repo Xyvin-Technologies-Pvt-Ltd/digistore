@@ -111,23 +111,29 @@ class ShareService {
   /// Share referral code with app links
   Future<ShareResult> shareReferral({
     required String referralCode,
-    required String androidLink,
-    required String iosLink,
+    String? androidLink,
+    String? iosLink,
+    String? customMessage,
+    String? title,
   }) async {
     try {
       final code = referralCode.trim().toUpperCase();
-      final shareText =
-          'ഇനി ഓരോ ഷോപ്പിംഗും കൂടുതൽ ലാഭകരമാക്കാം!\n\n'
-          'നമ്മുടെ നാട്ടിലെ കടകളിലെ മികച്ച ഓഫറുകളും ഡിസ്കൗണ്ടുകളും കണ്ടെത്താനും ഓരോ പർച്ചേസിനും റിവാർഡ് പോയിന്റുകൾ നേടാനും ഇതാ SETGO ആപ്പ്!\n\n'
-          'Referral Code ഉപയോഗിച്ച് രജിസ്റ്റർ ചെയ്യുമ്പോൾ കുറഞ്ഞത് ₹100 മൂല്യമുള്ള വൗച്ചർ നേടാം!\n\n'
-          'സുഹൃത്തുക്കളെ റഫർ ചെയ്ത് ₹10,000 വരെ ക്യാഷ്ബാക്ക് നേടാനുള്ള അവസരവും!\n\n'
-          'നാട്ടിലെ കടകളിലെ ആകർഷകമായ ഓഫറുകളും ഡിസ്കൗണ്ടുകളും അറിയാം. ഓരോ പർച്ചേസിലും റിവാർഡ് പോയിന്റുകൾ നേടാം.\n\n'
-          'ഇപ്പോൾ തന്നെ SETGO ആപ്പ് ഡൗൺലോഡ് ചെയ്യൂ!\n'
-          'Android: $androidLink\n'
-          'iOS: $iosLink\n\n'
-          'Referral Code: *$code*';
+      final shareText = (customMessage != null && customMessage.isNotEmpty)
+          ? customMessage
+          : 'ഇനി ഓരോ ഷോപ്പിംഗും കൂടുതൽ ലാഭകരമാക്കാം!\n\n'
+            'നമ്മുടെ നാട്ടിലെ കടകളിലെ മികച്ച ഓഫറുകളും ഡിസ്കൗണ്ടുകളും കണ്ടെത്താനും ഓരോ പർച്ചേസിനും റിവാർഡ് പോയിന്റുകൾ നേടാനും ഇതാ SETGO ആപ്പ്!\n\n'
+            'Referral Code ഉപയോഗിച്ച് രജിസ്റ്റർ ചെയ്യുമ്പോൾ കുറഞ്ഞത് ₹100 മൂല്യമുള്ള വൗച്ചർ നേടാം!\n\n'
+            'സുഹൃത്തുക്കളെ റഫർ ചെയ്ത് ₹10,000 വരെ ക്യാഷ്ബാക്ക് നേടാനുള്ള അവസരവും!\n\n'
+            'നാട്ടിലെ കടകളിലെ ആകർഷകമായ ഓഫറുകളും ഡിസ്കൗണ്ടുകളും അറിയാം. ഓരോ പർച്ചേസിലും റിവാർഡ് പോയിന്റുകൾ നേടാം.\n\n'
+            'ഇപ്പോൾ തന്നെ SETGO ആപ്പ് ഡൗൺലോഡ് ചെയ്യൂ!\n'
+            '${androidLink != null ? 'Android: $androidLink\n' : ''}'
+            '${iosLink != null ? 'iOS: $iosLink\n\n' : '\n'}'
+            'Referral Code: *$code*';
 
-      final params = ShareParams(text: shareText, title: 'SETGO - Invite Friends');
+      final params = ShareParams(
+        text: shareText,
+        title: title ?? 'SETGO - Invite Friends',
+      );
 
       final result = await SharePlus.instance.share(params);
       return result;

@@ -43,14 +43,42 @@ class ReferralApplyResult {
   bool get shouldContinue => applied || alreadyApplied;
 }
 
+class ReferralRewardDetail {
+  final int points;
+  final num rupeeValue;
+  final String title;
+
+  const ReferralRewardDetail({
+    required this.points,
+    required this.rupeeValue,
+    required this.title,
+  });
+
+  factory ReferralRewardDetail.fromJson(Map<String, dynamic> json) {
+    return ReferralRewardDetail(
+      points: _asInt(json['points']),
+      rupeeValue: _asNum(json['rupeeValue']),
+      title: json['title']?.toString() ?? '',
+    );
+  }
+}
+
 class ReferralSharePayload {
+  final bool isActive;
   final String referralCode;
   final int rewardPoints;
   final num rupeeEquivalent;
+  final int newUserRewardPoints;
+  final num newUserRupeeEquivalent;
+  final int pointConversionRate;
   final int successfulReferrals;
   final int totalPointsEarned;
+  final num totalRupeeEarned;
   final int minPurchaseForRedemption;
+  final int? maxReferrals;
   final String shareTitle;
+  final String shareDescription;
+  final String shareImage;
   final String shareMessage;
   final String shareUrl;
   final String whatsappUrl;
@@ -59,16 +87,26 @@ class ReferralSharePayload {
   final String playStoreUrl;
   final String appStoreUrl;
   final String deepLink;
+  final ReferralRewardDetail? referrerReward;
+  final ReferralRewardDetail? newUserReward;
   final String terms;
 
   const ReferralSharePayload({
+    this.isActive = true,
     required this.referralCode,
     required this.rewardPoints,
     required this.rupeeEquivalent,
+    this.newUserRewardPoints = 0,
+    this.newUserRupeeEquivalent = 0,
+    this.pointConversionRate = 10,
     required this.successfulReferrals,
     required this.totalPointsEarned,
+    this.totalRupeeEarned = 0,
     required this.minPurchaseForRedemption,
+    this.maxReferrals,
     required this.shareTitle,
+    this.shareDescription = '',
+    this.shareImage = '',
     required this.shareMessage,
     required this.shareUrl,
     required this.whatsappUrl,
@@ -77,18 +115,36 @@ class ReferralSharePayload {
     required this.playStoreUrl,
     required this.appStoreUrl,
     required this.deepLink,
+    this.referrerReward,
+    this.newUserReward,
     required this.terms,
   });
 
   factory ReferralSharePayload.fromJson(Map<String, dynamic> json) {
+    final referrerRewardMap = _asMap(json['referrerReward']);
+    final newUserRewardMap = _asMap(json['newUserReward']);
+
     return ReferralSharePayload(
+      isActive: json['isActive'] != false,
       referralCode: json['referralCode']?.toString() ?? '',
       rewardPoints: _asInt(json['rewardPoints']),
       rupeeEquivalent: _asNum(json['rupeeEquivalent']),
+      newUserRewardPoints: _asInt(json['newUserRewardPoints']),
+      newUserRupeeEquivalent: _asNum(json['newUserRupeeEquivalent']),
+      pointConversionRate: _asInt(json['pointConversionRate']) > 0
+          ? _asInt(json['pointConversionRate'])
+          : 10,
       successfulReferrals: _asInt(json['successfulReferrals']),
       totalPointsEarned: _asInt(json['totalPointsEarned']),
+      totalRupeeEarned: _asNum(json['totalRupeeEarned']),
       minPurchaseForRedemption: _asInt(json['minPurchaseForRedemption']),
-      shareTitle: json['shareTitle']?.toString() ?? 'Invite Friends & Earn Points',
+      maxReferrals: json['maxReferrals'] != null
+          ? _asIntOrNull(json['maxReferrals'])
+          : null,
+      shareTitle: json['shareTitle']?.toString() ??
+          'Invite Friends & Earn SetGo Rewards',
+      shareDescription: json['shareDescription']?.toString() ?? '',
+      shareImage: json['shareImage']?.toString() ?? '',
       shareMessage: json['shareMessage']?.toString() ?? '',
       shareUrl: json['shareUrl']?.toString() ?? '',
       whatsappUrl: json['whatsappUrl']?.toString() ?? '',
@@ -97,16 +153,22 @@ class ReferralSharePayload {
       playStoreUrl: json['playStoreUrl']?.toString() ?? '',
       appStoreUrl: json['appStoreUrl']?.toString() ?? '',
       deepLink: json['deepLink']?.toString() ?? '',
+      referrerReward: referrerRewardMap != null
+          ? ReferralRewardDetail.fromJson(referrerRewardMap)
+          : null,
+      newUserReward: newUserRewardMap != null
+          ? ReferralRewardDetail.fromJson(newUserRewardMap)
+          : null,
       terms: json['terms']?.toString() ?? '',
     );
   }
 
-  /// Lifetime points at the program rate: 10 points = ₹1.
-  ///
-  /// The my-code payload also sends [rupeeEquivalent], and that value has
-  /// come back equal to [rewardPoints] (both 10). Using it as rupees per
-  /// point shows ₹10 for a 10-point reward.
-  num get earnedRupees => totalPointsEarned / 10;
+  /// Lifetime points at the program rate: 10 points = ₹1 (or backend totalRupeeEarned).
+  num get earnedRupees {
+    if (totalRupeeEarned > 0) return totalRupeeEarned;
+    final rate = pointConversionRate > 0 ? pointConversionRate : 10;
+    return totalPointsEarned / rate;
+  }
 
   /// Formats the official referral invite message in Malayalam with code and link.
   static String buildInviteMessage({
@@ -126,39 +188,79 @@ class ReferralSharePayload {
 
   /// Rewrites invite links to match the API host the app is actually using.
   ///
-  /// UAT backends may still return a production `shareUrl`; this keeps
-  /// WhatsApp / SMS text on the same environment as [apiBaseUrl].
+  /// Preserves the backend's share content / template, only rewriting the
+  /// URL when running on a different test environment (e.g. UAT).
   ReferralSharePayload alignedToApiBase(String apiBaseUrl) {
     final code = referralCode.trim().toUpperCase();
     if (code.isEmpty) return this;
 
-    final correctUrl = '${ReferralCode.landingBaseFromApi(apiBaseUrl)}?ref=$code';
-    // Always rebuild the invite text so a stale production URL cannot survive
-    // string-replace edge cases from older backend payloads.
-    final message = buildInviteMessage(
-      referralCode: code,
-      shareUrl: correctUrl,
-    );
+    final targetLanding = ReferralCode.landingBaseFromApi(apiBaseUrl);
+    final correctUrl = '$targetLanding?ref=$code';
+
+    // Align URL if shareUrl is empty or if environments mismatch (e.g. UAT vs Prod)
+    final needsAlignment = shareUrl.isEmpty ||
+        (apiBaseUrl.contains('uat') != shareUrl.contains('uat'));
+    final finalShareUrl = needsAlignment ? correctUrl : shareUrl;
+
+    // Use backend share message if provided, aligning URL or placeholders as needed
+    String message;
+    if (shareMessage.isNotEmpty) {
+      message = shareMessage;
+      if (shareUrl.isNotEmpty && shareUrl != finalShareUrl) {
+        message = message.replaceAll(shareUrl, finalShareUrl);
+      }
+      if (message.contains('{code}')) {
+        message = message.replaceAll('{code}', code);
+      }
+      if (message.contains('{link}')) {
+        message = message.replaceAll('{link}', finalShareUrl);
+      }
+    } else if (shareDescription.isNotEmpty) {
+      message = shareDescription
+          .replaceAll('{code}', code)
+          .replaceAll('{link}', finalShareUrl);
+    } else {
+      message = buildInviteMessage(
+        referralCode: code,
+        shareUrl: finalShareUrl,
+      );
+    }
+
+    final finalWhatsapp = (whatsappUrl.isNotEmpty && shareUrl == finalShareUrl)
+        ? whatsappUrl
+        : 'https://api.whatsapp.com/send?text=${Uri.encodeComponent(message)}';
+    final finalSms = (smsUrl.isNotEmpty && shareUrl == finalShareUrl)
+        ? smsUrl
+        : 'sms:?body=${Uri.encodeComponent(message)}';
 
     return ReferralSharePayload(
+      isActive: isActive,
       referralCode: referralCode,
       rewardPoints: rewardPoints,
       rupeeEquivalent: rupeeEquivalent,
+      newUserRewardPoints: newUserRewardPoints,
+      newUserRupeeEquivalent: newUserRupeeEquivalent,
+      pointConversionRate: pointConversionRate,
       successfulReferrals: successfulReferrals,
       totalPointsEarned: totalPointsEarned,
+      totalRupeeEarned: totalRupeeEarned,
       minPurchaseForRedemption: minPurchaseForRedemption,
+      maxReferrals: maxReferrals,
       shareTitle: shareTitle,
+      shareDescription: shareDescription,
+      shareImage: shareImage,
       shareMessage: message,
-      shareUrl: correctUrl,
-      whatsappUrl:
-          'https://api.whatsapp.com/send?text=${Uri.encodeComponent(message)}',
-      smsUrl: 'sms:?body=${Uri.encodeComponent(message)}',
+      shareUrl: finalShareUrl,
+      whatsappUrl: finalWhatsapp,
+      smsUrl: finalSms,
       qrCodeData: qrCodeData,
       playStoreUrl: playStoreUrl,
       appStoreUrl: appStoreUrl,
       deepLink: deepLink.isNotEmpty
           ? deepLink
           : 'setgo://referral?code=$code',
+      referrerReward: referrerReward,
+      newUserReward: newUserReward,
       terms: terms,
     );
   }
@@ -221,7 +323,21 @@ int _asInt(dynamic value) {
   return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
+int? _asIntOrNull(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
+}
+
 num _asNum(dynamic value) {
   if (value is num) return value;
   return num.tryParse(value?.toString() ?? '') ?? 0;
 }
+
+Map<String, dynamic>? _asMap(dynamic value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return null;
+}
+
