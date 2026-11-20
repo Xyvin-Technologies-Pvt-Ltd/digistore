@@ -196,6 +196,8 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
 
   String? _offerBadgeText(ProductModel model) {
     if (!model.hasOffer) return null;
+    final badge = model.discountBadge;
+    if (badge != null && badge.isNotEmpty) return badge;
     final type = model.offerType?.toLowerCase();
     final value = model.offerValue;
     if (value == null || value <= 0) return 'Offer';
@@ -219,16 +221,35 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     return model.variants.first;
   }
 
-  double? _currentPrice(ProductModel model) {
+  String? _currentOfferPriceText(ProductModel model) {
     final variant = _selectedVariant(model);
-    if (variant != null) return variant.effectivePrice;
-    return model.displayPrice;
+    if (variant != null) {
+      if (variant.offerPrice != null &&
+          variant.offerPrice! > 0 &&
+          variant.offerPrice! < (variant.price ?? double.infinity)) {
+        return _formatMoney(variant.offerPrice!);
+      }
+      return null;
+    }
+    return model.offerRangeText;
   }
 
-  double? _currentBasePrice(ProductModel model) {
+  String _currentPriceText(ProductModel model) {
     final variant = _selectedVariant(model);
-    if (variant != null) return variant.price;
-    return model.price;
+    if (variant != null) {
+      return _formatMoney(variant.price ?? 0);
+    }
+    return model.priceRangeText;
+  }
+
+  bool _currentShowStrike(ProductModel model) {
+    final variant = _selectedVariant(model);
+    if (variant != null) {
+      final base = variant.price;
+      final eff = variant.effectivePrice;
+      return base != null && eff > 0 && base > eff;
+    }
+    return model.showStrikeThrough;
   }
 
   bool _currentInStock(ProductModel model) {
@@ -491,11 +512,10 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             ? [model.category!.subcategory!]
             : <String>[]);
 
-    final currentPrice = _currentPrice(model);
-    final basePrice = _currentBasePrice(model);
     final inStock = _currentInStock(model);
-    final showStrike =
-        basePrice != null && currentPrice != null && basePrice > currentPrice;
+    final showStrike = _currentShowStrike(model);
+    final currentOfferText = _currentOfferPriceText(model);
+    final currentPriceText = _currentPriceText(model);
     final offerBadge = _offerBadgeText(model);
 
     final metaChips = <String>[];
@@ -821,23 +841,24 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            if (currentPrice != null && currentPrice > 0)
-                              showStrike
-                                  ? OfferPriceRow(
-                                      offerPrice: _formatMoney(currentPrice),
-                                      originalPrice: _formatMoney(basePrice),
-                                      gap: screenSize.responsivePadding(8),
-                                    )
-                                  : Text(
-                                      _formatMoney(currentPrice),
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 26,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF07838C),
-                                        height: 1,
-                                      ),
-                                    ),
+                            if (showStrike && currentOfferText != null)
+                              OfferPriceRow(
+                                offerPrice: currentOfferText,
+                                originalPrice: currentPriceText,
+                                gap: screenSize.responsivePadding(8),
+                              )
+                            else if (currentPriceText.isNotEmpty &&
+                                currentPriceText != '₹0')
+                              Text(
+                                currentPriceText,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF07838C),
+                                  height: 1,
+                                ),
+                              ),
                             const Spacer(),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -1415,24 +1436,25 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        if (currentPrice != null && currentPrice > 0)
-                          showStrike
-                              ? OfferPriceRow(
-                                  offerPrice: _formatMoney(currentPrice),
-                                  originalPrice: _formatMoney(basePrice),
-                                  gap: 8,
-                                  offerFontSize: 18,
-                                  originalFontSize: 13,
-                                )
-                              : Text(
-                                  _formatMoney(currentPrice),
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF07838C),
-                                  ),
-                                )
+                        if (showStrike && currentOfferText != null)
+                          OfferPriceRow(
+                            offerPrice: currentOfferText,
+                            originalPrice: currentPriceText,
+                            gap: 8,
+                            offerFontSize: 18,
+                            originalFontSize: 13,
+                          )
+                        else if (currentPriceText.isNotEmpty &&
+                            currentPriceText != '₹0')
+                          Text(
+                            currentPriceText,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF07838C),
+                            ),
+                          )
                         else
                           Text(
                             '—',
@@ -1524,13 +1546,13 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     ScreenSizeData screenSize,
   ) {
     final title = productModel.title ?? '';
-    final price = productModel.displayPrice ?? productModel.price;
+    final formattedPrice = productModel.displayPriceText.isNotEmpty &&
+            productModel.displayPriceText != '₹0'
+        ? productModel.displayPriceText
+        : '';
     final image = productModel.images?.isNotEmpty == true
         ? productModel.images!.first
         : null;
-    final formattedPrice = price != null && price > 0
-        ? _formatMoney(price)
-        : '';
 
     return Container(
       decoration: BoxDecoration(

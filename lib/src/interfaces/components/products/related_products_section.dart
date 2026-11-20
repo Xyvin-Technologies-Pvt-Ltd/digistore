@@ -138,9 +138,9 @@ class _RelatedProductCard extends ConsumerWidget {
   const _RelatedProductCard({required this.product});
 
   String get _priceLabel {
-    final price = product.price;
-    if (price == null || price <= 0) return '';
-    return '₹${price.toStringAsFixed(price.truncateToDouble() == price ? 0 : 2)}';
+    final displayPrice = product.displayPriceText;
+    if (displayPrice.isNotEmpty && displayPrice != '₹0') return displayPrice;
+    return '';
   }
 
   @override

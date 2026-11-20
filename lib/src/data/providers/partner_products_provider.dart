@@ -14,6 +14,16 @@ class PartnerProductsState {
   final PaginationModel? pagination;
   final String searchQuery;
   final String? currentCategoryId;
+  final num? minPrice;
+  final num? maxPrice;
+  final String? tags;
+  final String? partnerId;
+  final String? sortBy;
+  final double? lat;
+  final double? lng;
+  final bool? inStock;
+  final bool? isActive;
+  final String? sortOrder;
 
   PartnerProductsState({
     this.products = const [],
@@ -23,6 +33,16 @@ class PartnerProductsState {
     this.pagination,
     this.searchQuery = '',
     this.currentCategoryId,
+    this.minPrice,
+    this.maxPrice,
+    this.tags,
+    this.partnerId,
+    this.sortBy,
+    this.lat,
+    this.lng,
+    this.inStock,
+    this.isActive,
+    this.sortOrder,
   });
 
   PartnerProductsState copyWith({
@@ -33,6 +53,16 @@ class PartnerProductsState {
     PaginationModel? pagination,
     String? searchQuery,
     String? Function()? currentCategoryId,
+    num? Function()? minPrice,
+    num? Function()? maxPrice,
+    String? Function()? tags,
+    String? Function()? partnerId,
+    String? Function()? sortBy,
+    double? Function()? lat,
+    double? Function()? lng,
+    bool? Function()? inStock,
+    bool? Function()? isActive,
+    String? Function()? sortOrder,
   }) {
     return PartnerProductsState(
       products: products ?? this.products,
@@ -44,6 +74,16 @@ class PartnerProductsState {
       currentCategoryId: currentCategoryId != null
           ? currentCategoryId()
           : this.currentCategoryId,
+      minPrice: minPrice != null ? minPrice() : this.minPrice,
+      maxPrice: maxPrice != null ? maxPrice() : this.maxPrice,
+      tags: tags != null ? tags() : this.tags,
+      partnerId: partnerId != null ? partnerId() : this.partnerId,
+      sortBy: sortBy != null ? sortBy() : this.sortBy,
+      lat: lat != null ? lat() : this.lat,
+      lng: lng != null ? lng() : this.lng,
+      inStock: inStock != null ? inStock() : this.inStock,
+      isActive: isActive != null ? isActive() : this.isActive,
+      sortOrder: sortOrder != null ? sortOrder() : this.sortOrder,
     );
   }
 }
@@ -60,12 +100,34 @@ class PartnerProducts extends _$PartnerProducts {
 
   Future<void> getProducts({
     int page = 1,
+    int limit = 20,
     String? search,
     String? categoryId,
+    num? minPrice,
+    num? maxPrice,
+    String? tags,
+    String? partnerId,
+    String? sortBy,
+    double? lat,
+    double? lng,
+    bool? inStock,
+    bool? isActive,
+    String? sortOrder,
     bool isRefresh = true,
   }) async {
     final currentSearch = search ?? state.searchQuery;
     final isCategoryChange = categoryId != state.currentCategoryId;
+
+    final effectiveMinPrice = minPrice ?? state.minPrice;
+    final effectiveMaxPrice = maxPrice ?? state.maxPrice;
+    final effectiveTags = tags ?? state.tags;
+    final effectivePartnerId = partnerId ?? state.partnerId;
+    final effectiveSortBy = sortBy ?? state.sortBy;
+    final effectiveLat = lat ?? state.lat;
+    final effectiveLng = lng ?? state.lng;
+    final effectiveInStock = inStock ?? state.inStock;
+    final effectiveIsActive = isActive ?? state.isActive;
+    final effectiveSortOrder = sortOrder ?? state.sortOrder;
 
     if (page == 1) {
       state = state.copyWith(
@@ -74,13 +136,26 @@ class PartnerProducts extends _$PartnerProducts {
         searchQuery: currentSearch,
         products: (search != null || isCategoryChange) ? [] : state.products,
         currentCategoryId: () => categoryId ?? state.currentCategoryId,
+        minPrice: () => effectiveMinPrice,
+        maxPrice: () => effectiveMaxPrice,
+        tags: () => effectiveTags,
+        partnerId: () => effectivePartnerId,
+        sortBy: () => effectiveSortBy,
+        lat: () => effectiveLat,
+        lng: () => effectiveLng,
+        inStock: () => effectiveInStock,
+        isActive: () => effectiveIsActive,
+        sortOrder: () => effectiveSortOrder,
       );
     } else {
       state = state.copyWith(isLoadingMore: true, error: null);
     }
 
     final api = ref.read(apiProvider);
-    final queryParams = {'page': page.toString(), 'limit': '20'};
+    final queryParams = {
+      'page': page.toString(),
+      'limit': limit.clamp(1, 100).toString(),
+    };
     if (currentSearch.isNotEmpty) {
       queryParams['search'] = currentSearch;
     }
@@ -89,6 +164,36 @@ class PartnerProducts extends _$PartnerProducts {
         activeCategoryId != 'All' &&
         activeCategoryId.isNotEmpty) {
       queryParams['category'] = activeCategoryId;
+    }
+    if (effectiveMinPrice != null) {
+      queryParams['minPrice'] = effectiveMinPrice.toString();
+    }
+    if (effectiveMaxPrice != null) {
+      queryParams['maxPrice'] = effectiveMaxPrice.toString();
+    }
+    if (effectiveTags != null && effectiveTags.trim().isNotEmpty) {
+      queryParams['tags'] = effectiveTags.trim();
+    }
+    if (effectivePartnerId != null && effectivePartnerId.trim().isNotEmpty) {
+      queryParams['partnerId'] = effectivePartnerId.trim();
+    }
+    if (effectiveSortBy != null && effectiveSortBy.trim().isNotEmpty) {
+      queryParams['sortBy'] = effectiveSortBy.trim();
+    }
+    if (effectiveLat != null) {
+      queryParams['lat'] = effectiveLat.toString();
+    }
+    if (effectiveLng != null) {
+      queryParams['lng'] = effectiveLng.toString();
+    }
+    if (effectiveInStock != null) {
+      queryParams['inStock'] = effectiveInStock.toString();
+    }
+    if (effectiveIsActive != null) {
+      queryParams['isActive'] = effectiveIsActive.toString();
+    }
+    if (effectiveSortOrder != null && effectiveSortOrder.trim().isNotEmpty) {
+      queryParams['sortOrder'] = effectiveSortOrder.trim();
     }
 
     final response = await api.get('/products', queryParams: queryParams);

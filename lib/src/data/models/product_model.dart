@@ -140,6 +140,56 @@ class ProductVariant {
   }
 }
 
+// ── Top-level formatting helpers (Notion Section 4) ──────────────────────────
+
+/// 1. Format Regular Price Range
+String getPriceRangeText(num price, num? maxPrice) {
+  if (maxPrice != null && maxPrice > price) {
+    return '₹${price.toInt()} - ₹${maxPrice.toInt()}';
+  }
+  return '₹${price.toInt()}';
+}
+
+/// 2. Format Discounted Offer Range
+String? getOfferRangeText(bool hasOffer, num? offerPrice, num? maxOfferPrice) {
+  if (!hasOffer || offerPrice == null) return null;
+  if (maxOfferPrice != null && maxOfferPrice > offerPrice) {
+    return '₹${offerPrice.toInt()} - ₹${maxOfferPrice.toInt()}';
+  }
+  return '₹${offerPrice.toInt()}';
+}
+
+/// 3. Discount Badge Label
+String? getDiscountBadge(Map<String, dynamic> product) {
+  if (product['hasOffer'] != true && product['hasOffer'] != 'true') return null;
+
+  final offerType = product['offerType']?.toString().toLowerCase();
+  if (offerType == 'percentage') {
+    final num val = (product['offerValue'] as num?) ??
+        num.tryParse(product['offerValue']?.toString() ?? '') ??
+        0;
+    final num? maxVal = (product['maxOfferValue'] as num?) ??
+        num.tryParse(product['maxOfferValue']?.toString() ?? '');
+    if (maxVal != null && maxVal > val) {
+      final valStr = val % 1 == 0 ? val.toInt().toString() : val.toString();
+      final maxValStr =
+          maxVal % 1 == 0 ? maxVal.toInt().toString() : maxVal.toString();
+      return '$valStr% -$maxValStr% OFF';
+    }
+    final valStr = val % 1 == 0 ? val.toInt().toString() : val.toString();
+    return '$valStr% OFF';
+  }
+
+  final dynamic rawVal = product['offerValue'];
+  final valStr = rawVal is num
+      ? (rawVal % 1 == 0 ? rawVal.toInt().toString() : rawVal.toString())
+      : rawVal?.toString();
+  if (valStr != null && valStr.isNotEmpty) {
+    return 'Flat ₹$valStr OFF';
+  }
+  return 'Offer';
+}
+
 class ProductModel {
   final String? id;
   final String? partnerId;
@@ -147,11 +197,17 @@ class ProductModel {
   final String? description;
   final List<String>? images;
   final double? price;
+  final double? maxPrice;
   final bool hasOffer;
   final String? offerType;
   final double? offerValue;
+  final double? maxOfferValue;
   final double? offerPrice;
+  final double? maxOfferPrice;
+  final String? priceDisplay;
+  final String? offerPriceDisplay;
   final double? effectivePrice;
+  final double? effectiveMaxPrice;
   final bool inStock;
   final String? sku;
   final String? brand;
@@ -177,11 +233,17 @@ class ProductModel {
     this.description,
     this.images,
     this.price,
+    this.maxPrice,
     this.hasOffer = false,
     this.offerType,
     this.offerValue,
+    this.maxOfferValue,
     this.offerPrice,
+    this.maxOfferPrice,
+    this.priceDisplay,
+    this.offerPriceDisplay,
     this.effectivePrice,
+    this.effectiveMaxPrice,
     this.inStock = true,
     this.sku,
     this.brand,
@@ -201,7 +263,54 @@ class ProductModel {
     this.isFavorited,
   });
 
-  /// Best display price: effectivePrice → offerPrice → price.
+  /// True if the product defines a regular price range (maxPrice > price).
+  bool get hasPriceRange =>
+      maxPrice != null && price != null && maxPrice! > price!;
+
+  /// True if the product defines a discounted offer range (maxOfferPrice > offerPrice).
+  bool get hasOfferRange =>
+      hasOffer &&
+      maxOfferPrice != null &&
+      offerPrice != null &&
+      maxOfferPrice! > offerPrice!;
+
+  /// Regular price display string e.g. "₹500 - ₹1,000" or "₹500".
+  String get priceRangeText {
+    if (priceDisplay != null && priceDisplay!.trim().isNotEmpty) {
+      return priceDisplay!;
+    }
+    return getPriceRangeText(price ?? 0, maxPrice);
+  }
+
+  /// Discounted offer price display string e.g. "₹400 - ₹700" or "₹400".
+  String? get offerRangeText {
+    if (offerPriceDisplay != null && offerPriceDisplay!.trim().isNotEmpty) {
+      return offerPriceDisplay!;
+    }
+    return getOfferRangeText(hasOffer, offerPrice, maxOfferPrice);
+  }
+
+  /// Discount badge label e.g. "10% - 20% OFF", "20% OFF", or "Flat ₹100 OFF".
+  String? get discountBadge {
+    if (!hasOffer) return null;
+    return getDiscountBadge({
+      'hasOffer': hasOffer,
+      'offerType': offerType,
+      'offerValue': offerValue,
+      'maxOfferValue': maxOfferValue,
+    });
+  }
+
+  /// Single primary display price string following Notion UI logic:
+  /// Active price (offer range or regular range).
+  String get displayPriceText {
+    if (hasOffer && offerRangeText != null) {
+      return offerRangeText!;
+    }
+    return priceRangeText;
+  }
+
+  /// Best numeric display price: effectivePrice → offerPrice → price.
   double? get displayPrice {
     if (effectivePrice != null && effectivePrice! > 0) return effectivePrice;
     if (hasOffer && offerPrice != null && offerPrice! > 0) return offerPrice;
@@ -209,9 +318,15 @@ class ProductModel {
   }
 
   bool get showStrikeThrough {
+    if (!hasOffer) return false;
+    if (offerRangeText != null &&
+        offerRangeText!.isNotEmpty &&
+        offerRangeText != priceRangeText) {
+      return true;
+    }
     final base = price ?? 0;
     final sale = displayPrice ?? 0;
-    return hasOffer && base > 0 && sale > 0 && sale < base;
+    return base > 0 && sale > 0 && sale < base;
   }
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
@@ -235,6 +350,12 @@ class ProductModel {
         (json['views'] as num?)?.toInt() ??
         0;
 
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
     return ProductModel(
       id: json['_id']?.toString() ?? json['id']?.toString(),
       partnerId: json['partnerId'] is Map
@@ -246,12 +367,18 @@ class ProductModel {
       images: json['images'] != null
           ? List<String>.from((json['images'] as List).map((e) => e.toString()))
           : null,
-      price: (json['price'] as num?)?.toDouble(),
+      price: parseDouble(json['price']),
+      maxPrice: parseDouble(json['maxPrice']),
       hasOffer: json['hasOffer'] as bool? ?? false,
       offerType: json['offerType']?.toString(),
-      offerValue: (json['offerValue'] as num?)?.toDouble(),
-      offerPrice: (json['offerPrice'] as num?)?.toDouble(),
-      effectivePrice: (json['effectivePrice'] as num?)?.toDouble(),
+      offerValue: parseDouble(json['offerValue']),
+      maxOfferValue: parseDouble(json['maxOfferValue']),
+      offerPrice: parseDouble(json['offerPrice']),
+      maxOfferPrice: parseDouble(json['maxOfferPrice']),
+      priceDisplay: json['priceDisplay']?.toString(),
+      offerPriceDisplay: json['offerPriceDisplay']?.toString(),
+      effectivePrice: parseDouble(json['effectivePrice']),
+      effectiveMaxPrice: parseDouble(json['effectiveMaxPrice']),
       inStock: json['inStock'] as bool? ?? true,
       sku: json['sku']?.toString(),
       brand: json['brand']?.toString(),
@@ -292,11 +419,17 @@ class ProductModel {
       'description': description,
       'images': images,
       'price': price,
+      'maxPrice': maxPrice,
       'hasOffer': hasOffer,
       'offerType': offerType,
       'offerValue': offerValue,
+      'maxOfferValue': maxOfferValue,
       'offerPrice': offerPrice,
+      'maxOfferPrice': maxOfferPrice,
+      'priceDisplay': priceDisplay ?? priceRangeText,
+      'offerPriceDisplay': offerPriceDisplay ?? offerRangeText,
       'effectivePrice': effectivePrice,
+      'effectiveMaxPrice': effectiveMaxPrice,
       'inStock': inStock,
       'sku': sku,
       'brand': brand,
@@ -317,6 +450,80 @@ class ProductModel {
       'isFavorited': isFavorited,
       'isFavorite': isFavorited,
     };
+  }
+
+  ProductModel copyWith({
+    String? id,
+    String? partnerId,
+    String? title,
+    String? description,
+    List<String>? images,
+    double? price,
+    double? maxPrice,
+    bool? hasOffer,
+    String? offerType,
+    double? offerValue,
+    double? maxOfferValue,
+    double? offerPrice,
+    double? maxOfferPrice,
+    String? priceDisplay,
+    String? offerPriceDisplay,
+    double? effectivePrice,
+    double? effectiveMaxPrice,
+    bool? inStock,
+    String? sku,
+    String? brand,
+    String? unit,
+    String? weight,
+    List<ProductSpec>? specifications,
+    bool? hasVariants,
+    List<ProductVariant>? variants,
+    ProductCategory? category,
+    List<String>? tags,
+    bool? isActive,
+    int? views,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Map<String, dynamic>? partnerObj,
+    List<dynamic>? branchLocations,
+    bool? isFavorited,
+  }) {
+    return ProductModel(
+      id: id ?? this.id,
+      partnerId: partnerId ?? this.partnerId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      images: images ?? this.images,
+      price: price ?? this.price,
+      maxPrice: maxPrice ?? this.maxPrice,
+      hasOffer: hasOffer ?? this.hasOffer,
+      offerType: offerType ?? this.offerType,
+      offerValue: offerValue ?? this.offerValue,
+      maxOfferValue: maxOfferValue ?? this.maxOfferValue,
+      offerPrice: offerPrice ?? this.offerPrice,
+      maxOfferPrice: maxOfferPrice ?? this.maxOfferPrice,
+      priceDisplay: priceDisplay ?? this.priceDisplay,
+      offerPriceDisplay: offerPriceDisplay ?? this.offerPriceDisplay,
+      effectivePrice: effectivePrice ?? this.effectivePrice,
+      effectiveMaxPrice: effectiveMaxPrice ?? this.effectiveMaxPrice,
+      inStock: inStock ?? this.inStock,
+      sku: sku ?? this.sku,
+      brand: brand ?? this.brand,
+      unit: unit ?? this.unit,
+      weight: weight ?? this.weight,
+      specifications: specifications ?? this.specifications,
+      hasVariants: hasVariants ?? this.hasVariants,
+      variants: variants ?? this.variants,
+      category: category ?? this.category,
+      tags: tags ?? this.tags,
+      isActive: isActive ?? this.isActive,
+      views: views ?? this.views,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      partnerObj: partnerObj ?? this.partnerObj,
+      branchLocations: branchLocations ?? this.branchLocations,
+      isFavorited: isFavorited ?? this.isFavorited,
+    );
   }
 }
 

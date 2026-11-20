@@ -467,9 +467,10 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                       image: (p.images != null && p.images!.isNotEmpty)
                           ? p.images![0]
                           : '',
-                      price: (p.price == null || p.price == 0)
-                          ? null
-                          : '₹ ${p.price! % 1 == 0 ? p.price!.toInt() : p.price}',
+                      price: (p.displayPriceText.isNotEmpty &&
+                              p.displayPriceText != '₹0')
+                          ? p.displayPriceText
+                          : null,
                       tags: p.tags,
                       rawProduct: p,
                     ),

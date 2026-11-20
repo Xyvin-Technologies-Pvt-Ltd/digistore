@@ -101,8 +101,9 @@ class PartnerUploadedProducts extends ConsumerWidget {
         ? product.images!.first
         : '';
 
-    final priceStr = product.price != null && product.price! > 0
-        ? '₹ ${product.price! % 1 == 0 ? product.price!.toInt() : product.price}'
+    final displayPrice = product.displayPriceText;
+    final priceStr = (displayPrice.isNotEmpty && displayPrice != '₹0')
+        ? displayPrice
         : '';
 
     return InteractiveFeedbackButton(

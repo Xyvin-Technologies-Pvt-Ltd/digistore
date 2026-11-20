@@ -54,31 +54,22 @@ class ProductCard extends ConsumerWidget {
     return priceStr;
   }
 
-  String _money(num value) {
-    final v = value.toDouble();
-    final formatted = v.truncateToDouble() == v
-        ? v.toStringAsFixed(0)
-        : v.toStringAsFixed(2);
-    return '₹$formatted';
-  }
-
   Widget _buildPriceLabel() {
     final product = rawProduct;
     if (product != null) {
-      final sale = product.displayPrice;
-      final base = product.price;
-      if (sale != null && sale > 0) {
-        if (product.showStrikeThrough && base != null && base > sale) {
-          return OfferPriceRow(
-            offerPrice: _money(sale),
-            originalPrice: _money(base),
-            gap: 6,
-            offerFontSize: 13,
-            originalFontSize: 11,
-          );
-        }
+      if (product.hasOffer && product.offerRangeText != null) {
+        return OfferPriceRow(
+          offerPrice: product.offerRangeText!,
+          originalPrice: product.priceRangeText,
+          gap: 6,
+          offerFontSize: 13,
+          originalFontSize: 11,
+        );
+      }
+      final regularPrice = product.priceRangeText;
+      if (regularPrice.isNotEmpty && regularPrice != '₹0') {
         return Text(
-          _money(sale),
+          regularPrice,
           style: kSmallerTitleM.copyWith(
             color: const Color(0xFF07838C),
             fontSize: 13,
@@ -120,6 +111,12 @@ class ProductCard extends ConsumerWidget {
   }
 
   String? get _badgeLabel {
+    if (rawProduct != null) {
+      final discount = rawProduct!.discountBadge;
+      if (discount != null && discount.isNotEmpty) {
+        return discount;
+      }
+    }
     final category =
         rawProduct?.category?.category ?? rawProduct?.category?.subcategory;
     if (category != null && category.trim().isNotEmpty) return category.trim();

@@ -79,13 +79,16 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
   late TextEditingController _descController;
   late TextEditingController _brandController;
   late TextEditingController _priceController;
+  late TextEditingController _maxPriceController;
   late TextEditingController _skuController;
   late TextEditingController _unitController;
   late TextEditingController _weightController;
   late TextEditingController _categoryController;
   late TextEditingController _tagsController;
   late TextEditingController _offerValueController;
+  late TextEditingController _maxOfferValueController;
   late TextEditingController _offerPriceController;
+  late TextEditingController _maxOfferPriceController;
 
   List<String> _tags = [];
   String? _selectedCategoryId;
@@ -107,7 +110,7 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
   /// Full product payload used for edit prefills (refreshed from API on open).
   Map<String, dynamic>? _productData;
 
-  static const int _maxImages = 5;
+  static const int _maxImages = 10;
 
   List<String> _imageUrlsFrom(Map<String, dynamic>? p) {
     final imgs = p?['images'];
@@ -129,11 +132,27 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
   void _recomputeOfferPrice() {
     final p = double.tryParse(_priceController.text.trim()) ?? 0;
     final v = double.tryParse(_offerValueController.text.trim()) ?? 0;
-    if (!_hasOffer || p <= 0) return;
-    final computed = _offerType == 'amount'
-        ? (p - v).clamp(0, double.infinity)
-        : (p * (1 - v / 100)).clamp(0, double.infinity);
-    _offerPriceController.text = computed.round().toString();
+    if (!_hasOffer) return;
+
+    if (p > 0) {
+      final computed = _offerType == 'amount'
+          ? (p - v).clamp(0, double.infinity)
+          : (p * (1 - v / 100)).clamp(0, double.infinity);
+      _offerPriceController.text = computed.round().toString();
+    }
+
+    final maxP = double.tryParse(_maxPriceController.text.trim());
+    if (maxP != null && maxP > p) {
+      final maxV = _offerType == 'percentage'
+          ? (double.tryParse(_maxOfferValueController.text.trim()) ?? v)
+          : v;
+      final computedMax = _offerType == 'amount'
+          ? (maxP - v).clamp(0, double.infinity)
+          : (maxP * (1 - maxV / 100)).clamp(0, double.infinity);
+      _maxOfferPriceController.text = computedMax.round().toString();
+    } else {
+      _maxOfferPriceController.clear();
+    }
   }
 
   bool get _isModified {
@@ -148,6 +167,9 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
       return true;
     }
     if (_priceController.text.trim() != (p['price']?.toString() ?? '')) {
+      return true;
+    }
+    if (_maxPriceController.text.trim() != (p['maxPrice']?.toString() ?? '')) {
       return true;
     }
     if (_skuController.text.trim() != (p['sku']?.toString() ?? '')) return true;
@@ -192,8 +214,16 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
           (p['offerValue']?.toString() ?? '0')) {
         return true;
       }
+      if (_maxOfferValueController.text.trim() !=
+          (p['maxOfferValue']?.toString() ?? '')) {
+        return true;
+      }
       if (_offerPriceController.text.trim() !=
           (p['offerPrice']?.toString() ?? '')) {
+        return true;
+      }
+      if (_maxOfferPriceController.text.trim() !=
+          (p['maxOfferPrice']?.toString() ?? '')) {
         return true;
       }
     }
@@ -254,13 +284,16 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
     _descController.text = p?['description']?.toString() ?? '';
     _brandController.text = p?['brand']?.toString() ?? '';
     _priceController.text = p?['price']?.toString() ?? '';
+    _maxPriceController.text = p?['maxPrice']?.toString() ?? '';
     _skuController.text = p?['sku']?.toString() ?? '';
     _unitController.text = p?['unit']?.toString().isNotEmpty == true
         ? p!['unit'].toString()
         : 'piece';
     _weightController.text = p?['weight']?.toString() ?? '';
     _offerValueController.text = p?['offerValue']?.toString() ?? '0';
+    _maxOfferValueController.text = p?['maxOfferValue']?.toString() ?? '';
     _offerPriceController.text = p?['offerPrice']?.toString() ?? '';
+    _maxOfferPriceController.text = p?['maxOfferPrice']?.toString() ?? '';
 
     final cat = p?['category'];
     _categoryController.text = cat is Map
@@ -376,11 +409,14 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
     _descController = TextEditingController();
     _brandController = TextEditingController();
     _priceController = TextEditingController();
+    _maxPriceController = TextEditingController();
     _skuController = TextEditingController();
     _unitController = TextEditingController(text: 'piece');
     _weightController = TextEditingController();
     _offerValueController = TextEditingController(text: '0');
+    _maxOfferValueController = TextEditingController();
     _offerPriceController = TextEditingController();
+    _maxOfferPriceController = TextEditingController();
     _categoryController = TextEditingController();
     _tagsController = TextEditingController();
 
@@ -391,6 +427,10 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
       _recomputeOfferPrice();
       _onFieldChanged();
     });
+    _maxPriceController.addListener(() {
+      _recomputeOfferPrice();
+      _onFieldChanged();
+    });
     _skuController.addListener(_onFieldChanged);
     _unitController.addListener(_onFieldChanged);
     _weightController.addListener(_onFieldChanged);
@@ -398,7 +438,12 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
       _recomputeOfferPrice();
       _onFieldChanged();
     });
+    _maxOfferValueController.addListener(() {
+      _recomputeOfferPrice();
+      _onFieldChanged();
+    });
     _offerPriceController.addListener(_onFieldChanged);
+    _maxOfferPriceController.addListener(_onFieldChanged);
 
     _applyProductData(widget.product);
 
@@ -422,13 +467,16 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
     _descController.dispose();
     _brandController.dispose();
     _priceController.dispose();
+    _maxPriceController.dispose();
     _skuController.dispose();
     _unitController.dispose();
     _weightController.dispose();
     _categoryController.dispose();
     _tagsController.dispose();
     _offerValueController.dispose();
+    _maxOfferValueController.dispose();
     _offerPriceController.dispose();
+    _maxOfferPriceController.dispose();
     for (final s in _specs) {
       s.dispose();
     }
@@ -547,6 +595,35 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
       return;
     }
 
+    final maxPriceStr = _maxPriceController.text.trim();
+    if (maxPriceStr.isNotEmpty) {
+      final maxPriceVal = double.tryParse(maxPriceStr);
+      if (maxPriceVal == null || maxPriceVal < priceVal) {
+        ToastService().showToast(
+          context,
+          'Max price must be greater than or equal to base price',
+          type: ToastType.error,
+        );
+        return;
+      }
+    }
+
+    if (_hasOffer && _offerType == 'percentage') {
+      final ov = double.tryParse(_offerValueController.text.trim()) ?? 0;
+      final movStr = _maxOfferValueController.text.trim();
+      if (movStr.isNotEmpty) {
+        final mov = double.tryParse(movStr);
+        if (mov == null || mov < ov || mov > 100) {
+          ToastService().showToast(
+            context,
+            'Max discount percentage must be between ${ov.toInt()}% and 100%',
+            type: ToastType.error,
+          );
+          return;
+        }
+      }
+    }
+
     if (_hasVariants) {
       for (final v in _variants) {
         if (v.name.text.trim().isEmpty) {
@@ -600,6 +677,7 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
         'title': title,
         'description': _descController.text.trim(),
         'price': priceStr,
+        if (maxPriceStr.isNotEmpty) 'maxPrice': maxPriceStr,
         'tags': _tags.isNotEmpty ? jsonEncode(_tags) : null,
         'isActive': _isActive.toString(),
         'inStock': _inStock.toString(),
@@ -618,8 +696,14 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
         rawBody['offerValue'] = _offerValueController.text.trim().isEmpty
             ? '0'
             : _offerValueController.text.trim();
+        final mov = _maxOfferValueController.text.trim();
+        if (_offerType == 'percentage' && mov.isNotEmpty) {
+          rawBody['maxOfferValue'] = mov;
+        }
         final op = _offerPriceController.text.trim();
         if (op.isNotEmpty) rawBody['offerPrice'] = op;
+        final mop = _maxOfferPriceController.text.trim();
+        if (mop.isNotEmpty) rawBody['maxOfferPrice'] = mop;
       }
 
       if (_selectedCategoryId != null) {
@@ -878,12 +962,27 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    PrimaryTextField(
-                      controller: _priceController,
-                      label: 'Base Price (₹)',
-                      hint: '₹ 0.00',
-                      isRequired: true,
-                      type: TextFieldType.number,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: PrimaryTextField(
+                            controller: _priceController,
+                            label: 'Base Price (₹)',
+                            hint: '₹ 0.00',
+                            isRequired: true,
+                            type: TextFieldType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: PrimaryTextField(
+                            controller: _maxPriceController,
+                            label: 'Max Price (₹, optional)',
+                            hint: 'For price range',
+                            type: TextFieldType.number,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 20),
                     Row(
@@ -990,22 +1089,56 @@ class _CreateProductPageState extends ConsumerState<CreateProductPage> {
                               ],
                             ),
                             const SizedBox(height: 14),
-                            PrimaryTextField(
-                              controller: _offerValueController,
-                              label: _offerType == 'amount'
-                                  ? 'Flat Discount (₹)'
-                                  : 'Discount Percentage (%)',
-                              hint: _offerType == 'amount'
-                                  ? 'e.g. 100'
-                                  : 'e.g. 20',
-                              type: TextFieldType.number,
-                            ),
+                            if (_offerType == 'percentage')
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: PrimaryTextField(
+                                      controller: _offerValueController,
+                                      label: 'Discount (%)',
+                                      hint: 'e.g. 10',
+                                      type: TextFieldType.number,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: PrimaryTextField(
+                                      controller: _maxOfferValueController,
+                                      label: 'Max Discount (%)',
+                                      hint: 'e.g. 25 (optional)',
+                                      type: TextFieldType.number,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else
+                              PrimaryTextField(
+                                controller: _offerValueController,
+                                label: 'Flat Discount (₹)',
+                                hint: 'e.g. 100',
+                                type: TextFieldType.number,
+                              ),
                             const SizedBox(height: 14),
-                            PrimaryTextField(
-                              controller: _offerPriceController,
-                              label: 'Offer Price (₹)',
-                              hint: 'Final customer price',
-                              type: TextFieldType.number,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: PrimaryTextField(
+                                    controller: _offerPriceController,
+                                    label: 'Offer Price (₹)',
+                                    hint: 'Auto or custom min',
+                                    type: TextFieldType.number,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: PrimaryTextField(
+                                    controller: _maxOfferPriceController,
+                                    label: 'Max Offer Price (₹)',
+                                    hint: 'Optional range max',
+                                    type: TextFieldType.number,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ],
